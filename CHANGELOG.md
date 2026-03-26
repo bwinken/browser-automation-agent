@@ -55,7 +55,6 @@
 ## Roadmap
 
 ### [0.2.0] — Authentication & Reliability
-> Target: 2026-04
 
 - **Credential store** — detect when agent fills login forms; encrypt and
   persist credentials in MongoDB; auto-inject on subsequent tasks for the
@@ -72,7 +71,6 @@
 ---
 
 ### [0.3.0] — Structured HITL & Fully Automated Mode
-> Target: 2026-04
 
 - **Option-based HITL** — instead of free-text, agent can present the
   operator with structured choices (radio buttons / checkboxes in modal)
@@ -87,7 +85,6 @@
 ---
 
 ### [0.4.0] — Frontend Execution Flow Visualisation
-> Target: 2026-05
 
 - **Structured step view** — replace flat terminal log with a timeline of
   agent steps: each tool call shown as a card (tool name, args, result,
@@ -101,7 +98,6 @@
 ---
 
 ### [0.5.0] — Task Continuation & Long-running Sessions
-> Target: 2026-05
 
 - **Continue task** — `POST /api/task/{id}/continue` resumes a `failed` or
   `paused` task from the last known browser state; preserves full message
@@ -114,7 +110,6 @@
 ---
 
 ### [0.6.0] — Parallel Task Execution (Optional)
-> Target: 2026-06
 
 - **Parallelism analyser** — before execution, LLM analyses the task and
   splits it into independent sub-tasks (e.g. scrape N URLs concurrently)
@@ -123,6 +118,3 @@
 - **Dependency graph** — tasks with data dependencies execute sequentially;
   independent tasks fan out across the semaphore pool
 
----
-
-*Kane.Beh 4422*

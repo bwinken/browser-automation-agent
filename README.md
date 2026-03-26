@@ -161,6 +161,3 @@ run.py               Entry point (sets Windows event loop policy)
 Dockerfile
 ```
 
----
-
-*Kane.Beh 4422*
