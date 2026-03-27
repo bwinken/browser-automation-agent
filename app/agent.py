@@ -392,14 +392,18 @@ class AgentRunner:
 
         finally:
             # Persist conversation history for task continuation
-            # Only keep user + assistant text — skip system, tool, tool_calls
-            self.task.messages = [
-                {"role": m["role"], "content": m["content"]}
-                for m in self._messages
-                if m.get("role") in ("user", "assistant")
-                and isinstance(m.get("content"), str)
-                and m["content"].strip()
-            ]
+            saved = []
+            for m in self._messages:
+                role = m.get("role") if isinstance(m, dict) else None
+                if role not in ("user", "assistant"):
+                    continue
+                content = m.get("content") if isinstance(m, dict) else None
+                if isinstance(content, str) and content.strip():
+                    saved.append({"role": role, "content": content})
+            # Always include original prompt even if nothing else saved
+            if not saved:
+                saved = [{"role": "user", "content": self.task.prompt}]
+            self.task.messages = saved
             try:
                 await self.task.save()
             except Exception:

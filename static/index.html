@@ -250,6 +250,24 @@ async function handleSend() {
     if (!canContinue) addToolLine('Task submitted: ' + currentTaskId, 'meta');
     connectWs(currentTaskId);
     loadHistory();
+
+    // Safety: poll for result in case WS misses completion
+    if (canContinue) {
+      setTimeout(async () => {
+        try {
+          const pr = await fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
+          if (pr.ok) {
+            const pt = await pr.json();
+            if (pt.status === 'completed' || pt.status === 'failed') {
+              setBadge(pt.status);
+              enableSend();
+              if (pt.result_data) showStructuredResult(pt.result_data);
+              loadHistory();
+            }
+          }
+        } catch {}
+      }, 8000);
+    }
   } catch (e) { addChat('system', 'Network error: ' + e.message); setBadge('failed'); enableSend(); }
 }
 

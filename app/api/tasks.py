@@ -64,7 +64,8 @@ async def continue_task(
             event.set()
         return {"task_id": task.task_id, "status": "resumed"}
     if not task.messages:
-        raise HTTPException(status_code=400, detail="No conversation history to continue")
+        # Fallback: use original prompt as history
+        task.messages = [{"role": "user", "content": task.prompt}]
 
     runner = AgentRunner(task, user, follow_up=body.message)
     background_tasks.add_task(runner.run)
