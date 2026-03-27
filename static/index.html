@@ -6,388 +6,534 @@
   <title>BaaS — Browser Automation as a Service</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #0d1117;
-      --surface:  #161b22;
-      --border:   #30363d;
-      --accent:   #58a6ff;
-      --accent2:  #3fb950;
-      --warn:     #d29922;
-      --danger:   #f85149;
-      --text:     #c9d1d9;
-      --muted:    #8b949e;
-      --mono:     "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --accent: #58a6ff; --accent2: #3fb950; --warn: #d29922; --danger: #f85149;
+      --text: #c9d1d9; --muted: #8b949e;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: 1.6; }
 
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 14px;
-      line-height: 1.6;
-    }
+    /* ── Layout ── */
+    .app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
+    header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 1rem; color: var(--accent); letter-spacing: .03em; white-space: nowrap; }
+    header .badge { margin-left: auto; }
+    footer { padding: 8px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: .72rem; text-align: center; }
 
-    .app {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: 100vh;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 20px;
-    }
+    .workspace { display: grid; grid-template-columns: 220px 1fr 340px; gap: 0; overflow: hidden; min-height: 0; }
 
-    header {
-      padding: 24px 0 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    header h1 { font-size: 1.2rem; color: var(--accent); letter-spacing: .03em; }
-    header p  { color: var(--muted); font-size: .82rem; margin-top: 4px; }
+    /* ── Sidebar: History ── */
+    .sidebar { border-right: 1px solid var(--border); padding: 12px; overflow-y: auto; }
+    .sidebar-title { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+    .hist-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; cursor: pointer; margin-bottom: 4px; transition: border-color .15s; }
+    .hist-item:hover { border-color: var(--accent); }
+    .hist-item.active { border-color: var(--accent); background: #0d1520; }
+    .hist-prompt { font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hist-meta { display: flex; justify-content: space-between; margin-top: 2px; font-size: .62rem; color: var(--muted); }
 
-    main { padding: 20px 0; display: flex; flex-direction: column; gap: 16px; }
+    /* ── Center: Chat ── */
+    .chat-col { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
+    .chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .chat-input-bar { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+    .chat-input-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .88rem; padding: 8px 12px; outline: none; }
+    .chat-input-bar input:focus { border-color: var(--accent); }
+    .chat-input-bar button { border: none; border-radius: 6px; font-family: var(--mono); font-size: .85rem; padding: 8px 16px; cursor: pointer; background: var(--accent); color: #0d1117; font-weight: 700; }
+    .chat-input-bar button:disabled { opacity: .4; cursor: not-allowed; }
 
-    footer {
-      padding: 12px 0;
-      border-top: 1px solid var(--border);
-      color: var(--muted);
-      font-size: .75rem;
-      text-align: center;
-    }
+    /* Chat bubbles */
+    .msg { max-width: 85%; padding: 10px 14px; border-radius: 10px; font-size: .85rem; line-height: 1.6; word-break: break-word; }
+    .msg-user { align-self: flex-end; background: #1f3a5f; color: var(--accent); border-bottom-right-radius: 2px; }
+    .msg-agent { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+    .msg-system { align-self: center; background: none; color: var(--muted); font-size: .75rem; font-style: italic; }
+    .msg pre { white-space: pre-wrap; margin: 0; }
 
-    /* ── Card ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-    }
-    .card-title {
-      font-size: .68rem;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
+    /* Inline interaction (ask_user) */
+    .msg-ask { align-self: flex-start; background: var(--surface); border: 1px solid var(--warn); border-bottom-left-radius: 2px; }
+    .ask-q { font-weight: 600; margin-bottom: 8px; color: var(--warn); }
+    .ask-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .ask-opt { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .82rem; padding: 5px 12px; cursor: pointer; transition: all .15s; }
+    .ask-opt:hover { border-color: var(--accent); }
+    .ask-opt.sel { border-color: var(--accent); background: #1f3a5f; color: var(--accent); }
+    .ask-opt.sel-multi { border-color: var(--accent2); background: #1a3a25; color: var(--accent2); }
+    .ask-text-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .85rem; padding: 7px 10px; outline: none; margin-bottom: 6px; }
+    .ask-text-input:focus { border-color: var(--accent); }
+    .ask-actions { display: flex; gap: 6px; }
+    .ask-actions button { border: none; border-radius: 5px; font-family: var(--mono); font-size: .78rem; padding: 5px 12px; cursor: pointer; }
+    .btn-send { background: var(--accent2); color: #0d1117; font-weight: 600; }
+    .btn-skip { background: var(--border); color: var(--text); }
 
-    /* ── Controls ── */
-    textarea {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: .9rem;
-      padding: 10px 12px;
-      outline: none;
-      resize: vertical;
-      min-height: 88px;
-      transition: border-color .15s;
-    }
-    textarea:focus { border-color: var(--accent); }
+    /* ── Right: Tool Panel ── */
+    .tool-col { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .tool-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .tool-log { flex: 1; overflow-y: auto; padding: 10px 12px; font-size: .78rem; line-height: 1.7; background: #010409; }
+    .tl { color: var(--text); }
+    .tl.tool { color: #79c0ff; }
+    .tl.result { color: #56d364; }
+    .tl.err { color: var(--danger); }
+    .tl.meta { color: var(--muted); font-style: italic; }
+    .tl.skill { color: var(--warn); font-weight: 600; }
+    .tl.agent { color: #d2a8ff; font-style: italic; }
+    .tl .pfx { color: #444c56; user-select: none; margin-right: 4px; }
 
-    .actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      font-family: var(--mono);
-      font-size: .85rem;
-      padding: 8px 18px;
-      transition: opacity .15s;
-    }
-    button:disabled { opacity: .4; cursor: not-allowed; }
-    button:not(:disabled):hover { opacity: .82; }
-    .btn-primary { background: var(--accent);  color: #0d1117; font-weight: 700; }
-    .btn-muted   { background: var(--border);  color: var(--text); }
-
-    /* ── Status badge ── */
-    .badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: .72rem;
-      font-weight: 600;
-    }
-    .badge-idle      { background: #21262d; color: var(--muted); }
-    .badge-pending   { background: #21262d; color: var(--muted); }
-    .badge-running   { background: #1f3a5f; color: var(--accent); }
-    .badge-paused    { background: #3d2b00; color: var(--warn); }
+    /* ── Badge ── */
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .7rem; font-weight: 600; }
+    .badge-idle { background: #21262d; color: var(--muted); }
+    .badge-pending { background: #21262d; color: var(--muted); }
+    .badge-running { background: #1f3a5f; color: var(--accent); }
+    .badge-paused { background: #3d2b00; color: var(--warn); }
     .badge-completed { background: #1a3a25; color: var(--accent2); }
-    .badge-failed    { background: #3a1a1a; color: var(--danger); }
+    .badge-failed { background: #3a1a1a; color: var(--danger); }
 
-    #statusRow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-      font-size: .78rem;
-      color: var(--muted);
-    }
-    #taskIdLabel { font-size: .72rem; }
-
-    /* ── Terminal ── */
-    #terminal {
-      background: #010409;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px 14px;
-      height: 380px;
-      overflow-y: auto;
-      font-size: .81rem;
-      line-height: 1.75;
-    }
-    .ll { color: var(--text); }
-    .ll.tool   { color: #79c0ff; }
-    .ll.result { color: #56d364; }
-    .ll.err    { color: var(--danger); }
-    .ll.meta   { color: var(--muted); font-style: italic; }
-    .pfx { color: #444c56; user-select: none; margin-right: 6px; }
-
-    /* ── HITL Modal ── */
-    .overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.78);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
+    /* ── Modals (credentials + HITL) ── */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.78); z-index: 100; align-items: center; justify-content: center; }
     .overlay.open { display: flex; }
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 22px;
-      width: min(580px, 95vw);
-      max-height: 90vh;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .modal h2 { color: var(--warn); font-size: .95rem; }
-    .modal p  { font-size: .85rem; line-height: 1.6; }
-    #hitlImg  { width: 100%; border-radius: 6px; border: 1px solid var(--border); display: none; }
-    #hitlImg.show { display: block; }
-    .modal textarea { min-height: 70px; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; width: min(520px, 95vw); max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .modal h2 { font-size: .95rem; }
+    .modal p { font-size: .85rem; line-height: 1.6; }
+    .modal img { width: 100%; border-radius: 6px; border: 1px solid var(--border); display: none; }
+    .modal img.show { display: block; }
+    .modal textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .85rem; padding: 8px 10px; outline: none; min-height: 70px; resize: vertical; }
     .modal-foot { display: flex; gap: 8px; justify-content: flex-end; }
-    .btn-ok { background: var(--accent2); color: #0d1117; font-weight: 700; }
+    .modal-foot button { border: none; border-radius: 6px; font-family: var(--mono); font-size: .82rem; padding: 7px 16px; cursor: pointer; }
+    .modal-foot .btn-ok { background: var(--accent2); color: #0d1117; font-weight: 700; }
+    .modal-foot .btn-cancel { background: var(--border); color: var(--text); }
+    .cred-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .cred-field label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .cred-field input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .88rem; padding: 8px 12px; outline: none; }
+    .cred-field input:focus { border-color: var(--accent); }
 
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 1fr; }
+      .sidebar, .tool-col { display: none; }
+    }
   </style>
 </head>
 <body>
 <div class="app">
-
   <header>
-    <h1>&#9881; BaaS &mdash; Browser Automation as a Service</h1>
-    <p>Describe a task in plain English. The AI agent will execute it in a headless browser.</p>
+    <h1>&#9881; BaaS</h1>
+    <span style="color:var(--muted);font-size:.78rem" id="taskIdLabel"></span>
+    <span id="badge" class="badge badge-idle">idle</span>
   </header>
 
-  <main>
-    <!-- Task input -->
-    <div class="card">
-      <div class="card-title">Task</div>
-      <textarea id="promptInput" placeholder="e.g. Go to news.ycombinator.com and summarise the top 5 stories."></textarea>
-      <div class="actions">
-        <button class="btn-primary" id="runBtn" onclick="submitTask()">&#9654; Run</button>
-        <button class="btn-muted" onclick="clearAll()">Clear</button>
-        <span id="taskIdLabel"></span>
+  <div class="workspace">
+    <!-- Left: History -->
+    <div class="sidebar">
+      <div class="sidebar-title">History</div>
+      <div id="historyList"><span style="font-size:.75rem;color:var(--muted)">No tasks yet.</span></div>
+    </div>
+
+    <!-- Center: Chat -->
+    <div class="chat-col">
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg msg-system">Describe a task to get started.</div>
+      </div>
+      <div class="chat-input-bar">
+        <input id="chatInput" type="text" placeholder="Describe a task or reply to the agent..." />
+        <button id="sendBtn" onclick="handleSend()">Send</button>
       </div>
     </div>
 
-    <!-- Live output -->
-    <div class="card">
-      <div class="card-title">Live Output</div>
-      <div id="statusRow">
-        <span id="badge" class="badge badge-idle">idle</span>
+    <!-- Right: Tool Log -->
+    <div class="tool-col">
+      <div class="tool-header">Tool Execution</div>
+      <div class="tool-log" id="toolLog">
+        <div class="tl meta"><span class="pfx">&rsaquo;</span>Waiting for task&hellip;</div>
       </div>
-      <div id="terminal"><span class="ll meta">Waiting for task&hellip;</span></div>
     </div>
-  </main>
+  </div>
 
-  <footer>Kane.Beh 4422 &nbsp;&mdash;&nbsp; Browser Automation as a Service</footer>
+  <footer>Kane.Beh 4422 &mdash; Browser Automation as a Service</footer>
 </div>
 
 <!-- HITL Modal -->
 <div class="overlay" id="overlay">
   <div class="modal">
-    <h2>&#9888; Human Assistance Required</h2>
+    <h2 style="color:var(--warn)">&#9888; Human Assistance Required</h2>
     <p id="hitlReason"></p>
-    <img id="hitlImg" alt="Browser screenshot" />
-    <textarea id="hitlInput" placeholder="Type your response to the agent…"></textarea>
+    <img id="hitlImg" alt="Screenshot" />
+    <textarea id="hitlInput" placeholder="Type your response..."></textarea>
     <div class="modal-foot">
-      <button class="btn-muted" onclick="closeModal()">Dismiss</button>
+      <button class="btn-cancel" onclick="closeModal()">Dismiss</button>
       <button class="btn-ok" onclick="sendHitl()">Send</button>
     </div>
   </div>
 </div>
 
+<!-- Credential Modal -->
+<div class="overlay" id="credOverlay">
+  <div class="modal">
+    <h2 style="color:var(--accent)">&#128274; Credentials Required</h2>
+    <p id="credReason"></p>
+    <img id="credImg" alt="Screenshot" />
+    <div id="credFields"></div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeCredModal()">Cancel</button>
+      <button class="btn-ok" onclick="sendCredentials()">Submit</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  let ws = null;
-  let apiKey = '';
-  let currentTaskId = null;
-  const lines = [];
+let ws = null, apiKey = '', currentTaskId = null;
+const toolLines = [];
 
-  // Auto-load API key from server on page load
-  async function loadApiKey() {
-    try {
-      const r = await fetch('/api/task/demo-key');
-      const d = await r.json();
-      if (d.api_key) apiKey = d.api_key;
-    } catch (e) {}
+// ── Init ─────────────────────────────────────────────────────────
+async function init() {
+  try { const r = await fetch('/api/task/demo-key'); const d = await r.json(); if (d.api_key) apiKey = d.api_key; } catch {}
+  loadHistory();
+  document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+}
+
+// ── Send: new task or reply ──────────────────────────────────────
+async function handleSend() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  const badge = document.getElementById('badge').textContent;
+
+  // If task is active (running/paused), send reply via WebSocket
+  if (ws && ws.readyState === WebSocket.OPEN && (badge === 'paused' || badge === 'running')) {
+    ws.send(JSON.stringify({ type: 'hitl_response', response: text }));
+    addChat('user', text);
+    return;
   }
 
-  // ── Task submission ──────────────────────────────────────────────
-  async function submitTask() {
-    const prompt = document.getElementById('promptInput').value.trim();
-    if (!prompt) return;
-    if (!apiKey) { appendLog('No API key configured on server.', 'err'); return; }
+  if (!apiKey) { addChat('system', 'No API key configured.'); return; }
+  addChat('user', text);
 
-    closeWs();
-    clearTerminal();
-    setBadge('pending');
-    document.getElementById('runBtn').disabled = true;
-
+  // Fetch real status from server to avoid stale badge
+  let realStatus = badge;
+  if (currentTaskId) {
     try {
-      const r = await fetch('/api/task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({ prompt }),
-      });
-      const text = await r.text();
-      let d;
-      try { d = JSON.parse(text); } catch { appendLog('Server error: ' + text.slice(0, 200), 'err'); setBadge('failed'); enableRun(); return; }
-      if (!r.ok) { appendLog('Error: ' + (d.detail || JSON.stringify(d)), 'err'); setBadge('failed'); enableRun(); return; }
+      const sr = await fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
+      if (sr.ok) { const st = await sr.json(); realStatus = st.status; setBadge(realStatus); }
+    } catch {}
+  }
 
-      currentTaskId = d.task_id;
-      document.getElementById('taskIdLabel').textContent = 'id: ' + currentTaskId;
-      appendLog('Task submitted: ' + currentTaskId, 'meta');
-      connectWs(currentTaskId);
-    } catch (e) {
-      appendLog('Network error: ' + e.message, 'err');
-      setBadge('failed');
-      enableRun();
+  const canContinue = currentTaskId && (realStatus === 'completed' || realStatus === 'failed');
+
+  closeWs();
+  setBadge('pending');
+  document.getElementById('sendBtn').disabled = true;
+
+  try {
+    let url, reqBody;
+    if (canContinue) {
+      url = '/api/task/' + currentTaskId + '/continue';
+      reqBody = JSON.stringify({ message: text });
+      addToolLine('Continuing task with follow-up...', 'meta');
+    } else {
+      url = '/api/task';
+      reqBody = JSON.stringify({ prompt: text });
+      clearToolLog();
     }
-  }
 
-  // ── WebSocket ────────────────────────────────────────────────────
-  function connectWs(taskId) {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}/ws/task/${taskId}`);
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: reqBody,
+    });
+    const raw = await r.text();
+    let d; try { d = JSON.parse(raw); } catch { addChat('system', 'Server error: ' + raw.slice(0, 200)); setBadge('failed'); enableSend(); return; }
+    if (!r.ok) { addChat('system', 'Error: ' + (d.detail || JSON.stringify(d))); setBadge(realStatus); enableSend(); return; }
 
-    ws.onmessage = (e) => {
-      let msg; try { msg = JSON.parse(e.data); } catch { return; }
-      if (msg.type === 'heartbeat') return;
+    currentTaskId = d.task_id;
+    document.getElementById('taskIdLabel').textContent = 'Task: ' + currentTaskId.slice(0, 8) + '...';
+    if (!canContinue) addToolLine('Task submitted: ' + currentTaskId, 'meta');
+    connectWs(currentTaskId);
+    loadHistory();
+  } catch (e) { addChat('system', 'Network error: ' + e.message); setBadge('failed'); enableSend(); }
+}
 
-      if (msg.status) setBadge(msg.status);
+function enableSend() { document.getElementById('sendBtn').disabled = false; }
 
-      if (msg.type === 'log' && msg.message) {
-        const cls = msg.message.startsWith('Tool ▶') ? 'tool'
-                  : msg.message.startsWith('Tool ◀') ? 'result'
-                  : /fatal|error/i.test(msg.message) ? 'err' : '';
-        appendLog(msg.message, cls);
+// ── WebSocket ────────────────────────────────────────────────────
+let _wsReconnectTimer = null, _wsReconnectAttempts = 0;
+
+function connectWs(taskId) {
+  _wsReconnectAttempts = 0;
+  _connectWsInner(taskId);
+}
+function _connectWsInner(taskId) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/task/${taskId}`);
+
+  ws.onmessage = (e) => {
+    _wsReconnectAttempts = 0;
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'heartbeat') return;
+    if (msg.status) setBadge(msg.status);
+
+    if (msg.type === 'log' && msg.message) {
+      const cls = msg.message.includes('[SKILL:') ? 'skill'
+                : msg.message.startsWith('Agent:') ? 'agent'
+                : msg.message.startsWith('Tool \u25b6') ? 'tool'
+                : msg.message.startsWith('Tool \u25c0') ? 'result'
+                : /\[ERROR:|fatal|error/i.test(msg.message) ? 'err' : '';
+      addToolLine(msg.message, cls);
+    }
+
+    if (msg.type === 'status' && msg.logs) syncToolLog(msg.logs);
+
+    if (msg.type === 'ask_user') showAskUser(msg.question, msg.mode || 'text', msg.options);
+    if (msg.type === 'hitl_request') showModal(msg.reason, msg.screenshot_base64);
+    if (msg.type === 'credential_request') showCredModal(msg.reason, msg.fields, msg.screenshot_base64);
+
+    if (msg.status === 'completed' || msg.status === 'failed') {
+      enableSend();
+      loadHistory();
+      if (currentTaskId) {
+        fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } })
+          .then(r => r.json()).then(t => { if (t.result_data) showStructuredResult(t.result_data); }).catch(() => {});
       }
-
-      if (msg.type === 'status' && msg.logs) syncLogs(msg.logs);
-
-      if (msg.type === 'hitl_request') showModal(msg.reason, msg.screenshot_base64);
-
-      if (msg.status === 'completed' || msg.status === 'failed') enableRun();
-    };
-
-    ws.onerror = () => appendLog('WebSocket error.', 'err');
-    ws.onclose = () => appendLog('Connection closed.', 'meta');
-  }
-
-  function closeWs() { if (ws) { ws.close(); ws = null; } }
-
-  // ── Terminal ─────────────────────────────────────────────────────
-  function appendLog(text, cls = '') {
-    if (lines.length > 500) lines.shift();
-    lines.push({ text, cls });
-    render();
-  }
-
-  function syncLogs(logs) {
-    lines.length = 0;
-    logs.forEach(t => lines.push({ text: t, cls: '' }));
-    render();
-  }
-
-  function render() {
-    const t = document.getElementById('terminal');
-    t.innerHTML = lines.map(({ text, cls }) =>
-      `<div class="ll ${cls}"><span class="pfx">›</span>${esc(text)}</div>`
-    ).join('');
-    t.scrollTop = t.scrollHeight;
-  }
-
-  function clearTerminal() {
-    lines.length = 0;
-    document.getElementById('terminal').innerHTML = '<span class="ll meta">Waiting for task&hellip;</span>';
-  }
-
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // ── Badge ─────────────────────────────────────────────────────────
-  function setBadge(status) {
-    const b = document.getElementById('badge');
-    b.textContent = status;
-    b.className = `badge badge-${status}`;
-  }
-
-  function enableRun() { document.getElementById('runBtn').disabled = false; }
-
-  function clearAll() {
-    closeWs();
-    clearTerminal();
-    currentTaskId = null;
-    document.getElementById('taskIdLabel').textContent = '';
-    setBadge('idle');
-    enableRun();
-  }
-
-  // ── HITL Modal ────────────────────────────────────────────────────
-  function showModal(reason, screenshot) {
-    document.getElementById('hitlReason').textContent = reason || 'The agent needs your help.';
-    const img = document.getElementById('hitlImg');
-    if (screenshot) { img.src = 'data:image/png;base64,' + screenshot; img.classList.add('show'); }
-    else { img.classList.remove('show'); }
-    document.getElementById('hitlInput').value = '';
-    document.getElementById('overlay').classList.add('open');
-  }
-
-  function closeModal() { document.getElementById('overlay').classList.remove('open'); }
-
-  function sendHitl() {
-    const response = document.getElementById('hitlInput').value.trim();
-    if (!response) return;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'hitl_response', response }));
     }
-    appendLog('You: ' + response, 'result');
-    closeModal();
+  };
+  ws.onerror = () => addToolLine('WebSocket error.', 'err');
+  ws.onclose = () => {
+    addToolLine('Connection closed.', 'meta');
+    const badge = document.getElementById('badge').textContent;
+    if (['running','pending','paused'].includes(badge) && _wsReconnectAttempts < 5) {
+      _wsReconnectAttempts++;
+      const delay = 2000 * _wsReconnectAttempts;
+      addToolLine(`Reconnecting in ${delay/1000}s...`, 'meta');
+      _wsReconnectTimer = setTimeout(() => _connectWsInner(taskId), delay);
+    }
+  };
+}
+function closeWs() {
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+  _wsReconnectAttempts = 5;
+  if (ws) { ws.close(); ws = null; }
+}
+
+// ── Chat panel ───────────────────────────────────────────────────
+function addChat(role, text) {
+  const el = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-' + role;
+  div.textContent = text;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function addChatHTML(html) {
+  const el = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  el.appendChild(div.firstElementChild || div);
+  el.scrollTop = el.scrollHeight;
+  return div;
+}
+
+// ── Structured result rendering ──────────────────────────────────
+function showStructuredResult(r) {
+  let html = `<div class="msg msg-agent"><div style="white-space:pre-wrap">${esc(r.summary || '')}</div>`;
+  const shots = r.screenshots || (r.screenshot ? [r.screenshot] : []);
+  if (shots.length) {
+    html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">';
+    shots.forEach((s, i) => {
+      html += `<div style="position:relative"><img src="data:image/png;base64,${s}" style="width:100%;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open(this.src)" title="Click to enlarge" />`;
+      if (shots.length > 1) html += `<span style="position:absolute;top:4px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:.65rem;padding:1px 6px;border-radius:4px">${i+1}/${shots.length}</span>`;
+      html += '</div>';
+    });
+    html += '</div>';
   }
+  if (r.url) html += `<div style="margin-top:6px;font-size:.72rem;color:var(--muted)">${esc(r.url)}</div>`;
+  if (r.error) html += `<div style="margin-top:6px;color:var(--danger);font-size:.78rem">${esc(r.error)}</div>`;
+  if (r.complete === false) html += `<div style="margin-top:6px;color:var(--warn);font-size:.72rem">Task incomplete — send a follow-up to continue.</div>`;
+  html += '</div>';
+  addChatHTML(html);
+}
 
-  document.getElementById('overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+// ── ask_user in chat ─────────────────────────────────────────────
+let _askState = { mode: 'text', selected: [] };
 
-  // Init
-  loadApiKey();
+function showAskUser(question, mode, options) {
+  _askState = { mode, selected: [] };
+  let html = `<div class="msg msg-ask"><div class="ask-q">${esc(question)}</div>`;
+
+  if ((mode === 'single_select' || mode === 'multi_select') && options?.length) {
+    html += '<div class="ask-opts">';
+    options.forEach((o, i) => {
+      html += `<button class="ask-opt" data-val="${esc(o)}" onclick="toggleOpt(this)">${esc(o)}</button>`;
+    });
+    html += '</div>';
+  } else {
+    html += `<input class="ask-text-input" id="askTextInput" placeholder="Type your answer..." onkeydown="if(event.key==='Enter')submitAsk()" />`;
+  }
+  html += `<div class="ask-actions"><button class="btn-send" onclick="submitAsk()">Answer</button><button class="btn-skip" onclick="skipAsk()">Skip</button></div></div>`;
+  addChatHTML(html);
+
+  const inp = document.getElementById('askTextInput');
+  if (inp) setTimeout(() => inp.focus(), 100);
+}
+
+function toggleOpt(btn) {
+  const val = btn.dataset.val;
+  if (_askState.mode === 'single_select') {
+    btn.closest('.ask-opts').querySelectorAll('.ask-opt').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    _askState.selected = [val];
+  } else {
+    btn.classList.toggle('sel-multi');
+    if (_askState.selected.includes(val)) _askState.selected = _askState.selected.filter(v => v !== val);
+    else _askState.selected.push(val);
+  }
+}
+
+function submitAsk() {
+  let answer;
+  if (_askState.mode === 'text') {
+    const inp = document.getElementById('askTextInput');
+    answer = inp ? inp.value.trim() : '';
+  } else if (_askState.mode === 'single_select') {
+    answer = _askState.selected[0] || '';
+  } else {
+    answer = _askState.selected.join(', ');
+  }
+  if (!answer) return;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'hitl_response', response: answer }));
+  // Replace the ask bubble with the answer
+  const askBubbles = document.querySelectorAll('.msg-ask');
+  const last = askBubbles[askBubbles.length - 1];
+  if (last) { last.classList.remove('msg-ask'); last.classList.add('msg-agent'); last.querySelector('.ask-actions')?.remove(); last.querySelector('.ask-text-input')?.remove(); last.querySelectorAll('.ask-opt').forEach(b => { b.style.pointerEvents = 'none'; }); }
+  addChat('user', answer);
+}
+
+function skipAsk() {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'hitl_response', response: '(skipped)' }));
+  const askBubbles = document.querySelectorAll('.msg-ask');
+  const last = askBubbles[askBubbles.length - 1];
+  if (last) { last.querySelector('.ask-actions')?.remove(); last.querySelector('.ask-text-input')?.remove(); }
+  addChat('system', 'Skipped — agent will use its best judgement.');
+}
+
+// ── Tool log panel ───────────────────────────────────────────────
+function addToolLine(text, cls = '') {
+  if (toolLines.length > 500) toolLines.shift();
+  toolLines.push({ text, cls });
+  renderToolLog();
+}
+function syncToolLog(logs) {
+  toolLines.length = 0;
+  logs.forEach(t => {
+    const cls = t.includes('[SKILL:') ? 'skill' : t.startsWith('Agent:') ? 'agent'
+              : t.startsWith('Tool \u25b6') ? 'tool' : t.startsWith('Tool \u25c0') ? 'result'
+              : /\[ERROR:|fatal|error/i.test(t) ? 'err' : '';
+    toolLines.push({ text: t, cls });
+  });
+  renderToolLog();
+}
+function renderToolLog() {
+  const el = document.getElementById('toolLog');
+  el.innerHTML = toolLines.map(({ text, cls }) =>
+    `<div class="tl ${cls}"><span class="pfx">&rsaquo;</span>${esc(text)}</div>`
+  ).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function clearToolLog() { toolLines.length = 0; document.getElementById('toolLog').innerHTML = '<div class="tl meta"><span class="pfx">&rsaquo;</span>Waiting for task&hellip;</div>'; }
+
+// ── History ──────────────────────────────────────────────────────
+async function loadHistory() {
+  if (!apiKey) return;
+  try {
+    const r = await fetch('/api/task?limit=10', { headers: { 'Authorization': 'Bearer ' + apiKey } });
+    if (!r.ok) return;
+    renderHistory(await r.json());
+  } catch {}
+}
+function renderHistory(tasks) {
+  const el = document.getElementById('historyList');
+  if (!tasks.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">No tasks yet.</span>'; return; }
+  el.innerHTML = tasks.map(t => {
+    const d = new Date(t.created_at);
+    const time = d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const active = t.task_id === currentTaskId ? ' active' : '';
+    return `<div class="hist-item${active}" onclick="viewTask('${t.task_id}')">
+      <div class="hist-prompt" title="${esc(t.prompt)}">${esc(t.prompt)}</div>
+      <div class="hist-meta"><span>${time}</span><span class="badge badge-${t.status}">${t.status}</span></div>
+    </div>`;
+  }).join('');
+}
+async function viewTask(taskId) {
+  if (!apiKey) return;
+  try {
+    const r = await fetch('/api/task/' + taskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
+    if (!r.ok) return;
+    const t = await r.json();
+    currentTaskId = t.task_id;
+    document.getElementById('taskIdLabel').textContent = 'Task: ' + t.task_id.slice(0, 8) + '...';
+    setBadge(t.status);
+    // Rebuild chat
+    document.getElementById('chatMessages').innerHTML = '';
+    addChat('user', t.prompt || '');
+    if (t.result_data) showStructuredResult(t.result_data);
+    // Rebuild tool log
+    syncToolLog(t.logs || []);
+    closeWs();
+    if (['running','pending','paused'].includes(t.status)) connectWs(t.task_id);
+    else enableSend();
+    document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.hist-item').forEach(el => { if (el.onclick?.toString().includes(taskId)) el.classList.add('active'); });
+  } catch {}
+}
+
+// ── Badge ────────────────────────────────────────────────────────
+function setBadge(s) { const b = document.getElementById('badge'); b.textContent = s; b.className = 'badge badge-' + s; }
+
+// ── HITL Modal ───────────────────────────────────────────────────
+function showModal(reason, screenshot) {
+  document.getElementById('hitlReason').textContent = reason;
+  const img = document.getElementById('hitlImg');
+  if (screenshot) { img.src = 'data:image/png;base64,' + screenshot; img.classList.add('show'); } else img.classList.remove('show');
+  document.getElementById('hitlInput').value = '';
+  document.getElementById('overlay').classList.add('open');
+  addChat('agent', 'I need help: ' + reason);
+}
+function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+function sendHitl() {
+  const r = document.getElementById('hitlInput').value.trim(); if (!r) return;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'hitl_response', response: r }));
+  addChat('user', r); closeModal();
+}
+document.getElementById('overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+// ── Credential Modal ─────────────────────────────────────────────
+let _credFields = [];
+function showCredModal(reason, fields, screenshot) {
+  document.getElementById('credReason').textContent = reason;
+  const img = document.getElementById('credImg');
+  if (screenshot) { img.src = 'data:image/png;base64,' + screenshot; img.classList.add('show'); } else img.classList.remove('show');
+  _credFields = fields || [];
+  document.getElementById('credFields').innerHTML = _credFields.map(f =>
+    `<div class="cred-field"><label>${esc(f.label)}</label><input id="cred_${esc(f.name)}" type="${esc(f.type||'text')}" autocomplete="off" /></div>`
+  ).join('');
+  document.getElementById('credOverlay').classList.add('open');
+  addChat('agent', 'I need credentials: ' + reason);
+  setTimeout(() => { const first = document.querySelector('#credFields input'); if (first) first.focus(); }, 100);
+}
+function closeCredModal() { document.getElementById('credOverlay').classList.remove('open'); }
+function sendCredentials() {
+  const data = {}; let empty = false;
+  _credFields.forEach(f => { const v = document.getElementById('cred_'+f.name)?.value||''; data[f.name]=v; if(!v.trim()) empty=true; });
+  if (empty) return;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'hitl_response', response: JSON.stringify(data) }));
+  addChat('user', 'Credentials provided for: ' + _credFields.map(f=>f.label).join(', '));
+  closeCredModal();
+}
+document.getElementById('credOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeCredModal(); });
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+init();
 </script>
 </body>
 </html>
