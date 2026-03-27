@@ -21,7 +21,7 @@ from app.auth import hash_password
 from app.config import settings
 
 setup_logging(settings.log_level)
-from app.models import BrowserState, Task, User
+from app.models import Task, User
 from app.ws.hitl import hitl_websocket
 
 
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     client = AsyncIOMotorClient(settings.mongodb_url)
     await init_beanie(
         database=client[settings.db_name],
-        document_models=[User, BrowserState, Task],
+        document_models=[User, Task],
     )
     # Auto-create demo user if DEMO_API_KEY is set in .env
     if settings.demo_api_key:

@@ -33,6 +33,8 @@ class Task(Document):
     status: str = "pending"
     logs: List[str] = Field(default_factory=list)
     result_data: Optional[Dict[str, Any]] = None
+    # Full LLM conversation history — enables task continuation
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:

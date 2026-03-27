@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     max_concurrent_browsers: int = 2
     max_agent_iterations: int = 20
     demo_api_key: str = ""
+    twocaptcha_api_key: str = ""
+    download_dir: str = "downloads"
     headless: bool = True
     dev_mode: bool = False
     log_level: str = "INFO"
