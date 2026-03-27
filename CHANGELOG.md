@@ -2,6 +2,66 @@
 
 ---
 
+## [0.2.0] — 2026-03-28
+
+### Major upgrade — intelligent agent with vision, skills, and self-healing
+
+**Agent Intelligence**
+- ReAct execution loop: Reason → Act → Observe on every step
+- 27 progressive skill playbooks loaded on-demand via `load_skill()` tool
+- Vision support: agent sees screenshots via GPT-4o vision (CAPTCHA reading, coordinate clicking, result verification)
+- `review_and_finalize` tool: cross-checks summary against actual page before delivering results
+- Loop detection: warns at 4 repeats, force-breaks at 6 to prevent infinite loops
+- Structured error classification: `[ERROR:element_not_found]`, `[ERROR:loop_detected]`, etc.
+- Smart defaults: "明天一點" → PM 1:00, missing dates → tomorrow
+
+**New Tools (17 total)**
+- `click_position(x, y)` — pixel-coordinate clicking for calendar grids, canvas elements
+- `take_screenshot()` — captured image visible to LLM via vision
+- `scroll(direction, amount)` — page scrolling for lazy-loaded content
+- `press_key(key, hold_ms)` — keyboard with alias auto-fix + press-and-hold with human-like mouse simulation
+- `wait_for_element(selector)` — wait for dynamic elements
+- `select_option(selector, value)` — `<select>` dropdown handling
+- `download_file(url?, selector?)` — file download by URL or click trigger
+- `solve_captcha()` — multi-strategy: checkbox click → 2Captcha API → vision → HITL
+- `ask_user(question, mode, options)` — inline questions (text / single-select / multi-select)
+- `request_credentials(reason, fields)` — structured credential forms
+- `review_and_finalize(planned_summary)` — evidence verification before delivery
+- `load_skill(name)` — progressive skill loading
+
+**Skills System**
+- Cookie Consent, Popup/Overlay Dismissal, Autocomplete Handling
+- 8 authentication skills: Standard, Multi-Step, OAuth, SSO, Magic Link, Phone OTP, 2FA
+- CAPTCHA Handling, Image CAPTCHA / Verification Code
+- Date Picker Handling, Travel / Hotel Booking, Transportation / Ticket Booking
+- Search Filtering, Data Extraction, Evidence Collection, Self-Healing / Error Recovery
+- Avoid Blocked Services (Google workarounds)
+
+**Browser Reliability**
+- Auto-dismiss: cookie banners, login promos, notification popups (7 languages)
+- Selector fallbacks: CSS → text match → role match (automatic)
+- Click intercept handling: Escape → overlay dismiss → scroll (footer) → force click
+- `_wait_for_stable`: page stabilization after every action (domcontentloaded + networkidle)
+- Stealth: randomized UA + timezone, human-like delays, press-and-hold mouse simulation
+- 2Captcha integration for reCAPTCHA v2/v3, hCaptcha, Turnstile
+- LLM API timeout (120s SDK + 150s safety net)
+
+**Frontend — Chat Interface**
+- Three-panel layout: History | Chat | Tool Execution
+- Inline `ask_user` with single-select, multi-select, free-text modes
+- Credential modal with dynamic form fields
+- HITL modal with screenshot
+- Evidence screenshots in chat results (click to enlarge)
+- WebSocket auto-reconnect (5 attempts, linear backoff)
+- Task continuation: follow-up messages in same task preserve conversation history
+
+**API**
+- `POST /api/task/{id}/continue` — resume completed/failed tasks with follow-up
+- Task list: paginated, sorted newest first, includes `has_history` flag
+- Token usage tracking per user
+
+---
+
 ## [0.1.0] — 2026-03-26
 
 ### Initial release — core platform working end-to-end
