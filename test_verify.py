@@ -1,17 +1,35 @@
 """
 Post-task verification: cross-check agent results against evidence screenshots.
 Uses GPT vision to compare summary text with screenshot content.
+Saves full API response + logs + verification to test_<task_id>.log
 """
 import asyncio
 import base64
 import json
+import os
 import sys
+from datetime import datetime
+
 import httpx
 from openai import AsyncOpenAI
 
 
-async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str = "http://localhost:8080"):
-    """Fetch task result and verify against evidence screenshots."""
+async def verify_task(
+    task_id: str, api_key: str, openai_key: str,
+    base_url: str = "http://localhost:8080", log_dir: str = "test_logs",
+):
+    """Fetch task result, verify against screenshots, save full log."""
+
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"test_{task_id[:8]}.log")
+    log_lines = []
+
+    def log(msg: str):
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            print(msg.encode("ascii", errors="replace").decode())
+        log_lines.append(msg)
 
     # 1. Fetch task data
     async with httpx.AsyncClient() as client:
@@ -22,27 +40,57 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
         task = resp.json()
 
     status = task["status"]
+    logs = task.get("logs", [])
     result = task.get("result_data") or {}
     summary = result.get("summary", "")
     screenshots = result.get("screenshots", [])
     prompt = task.get("prompt", "")
+    created = task.get("created_at", "")
+    has_history = task.get("has_history", False)
 
-    print(f"=== Task: {task_id[:8]} ===")
-    print(f"Status: {status}")
-    print(f"Prompt: {prompt}")
-    print(f"Summary length: {len(summary)} chars")
-    print(f"Screenshots: {len(screenshots)}")
-    print()
+    log(f"{'=' * 60}")
+    log(f"TASK: {task_id}")
+    log(f"Date: {created}")
+    log(f"Status: {status}")
+    log(f"Prompt: {prompt}")
+    log(f"Has history: {has_history}")
+    log(f"Summary length: {len(summary)} chars")
+    log(f"Screenshots: {len(screenshots)}")
+    log(f"Log entries: {len(logs)}")
+    log(f"{'=' * 60}")
+
+    # 2. Write full agent logs
+    log("")
+    log("--- AGENT LOGS ---")
+    for entry in logs:
+        log(entry)
+
+    # 3. Write full summary
+    log("")
+    log("--- SUMMARY ---")
+    log(summary if summary else "(empty)")
+
+    # 4. Write result_data (without screenshots base64)
+    log("")
+    log("--- RESULT DATA ---")
+    result_clean = {k: v for k, v in result.items() if k != "screenshots"}
+    result_clean["screenshot_count"] = len(screenshots)
+    log(json.dumps(result_clean, indent=2, ensure_ascii=False))
+
+    # 5. Verification
+    log("")
+    log("--- VERIFICATION ---")
 
     if status != "completed":
-        print("FAIL: Task did not complete")
+        log("VERDICT: FAIL — Task did not complete")
+        _write_log(log_path, log_lines)
         return False
 
     if not summary or len(summary) < 20:
-        print("FAIL: Summary is empty or too short")
+        log("VERDICT: FAIL — Summary is empty or too short")
+        _write_log(log_path, log_lines)
         return False
 
-    # 2. Build verification prompt
     checks = [
         "1. DATA ACCURACY: Do the numbers in the summary (prices, temperatures, percentages) match the screenshot? Small rounding differences are OK.",
         "2. COMPLETENESS: Did the task ask for N items? Does the summary contain that many? Count them.",
@@ -78,8 +126,7 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
         },
     ]
 
-    # Add screenshots as vision images
-    for i, b64 in enumerate(screenshots[:3]):  # max 3 screenshots
+    for i, b64 in enumerate(screenshots[:3]):
         messages[1]["content"].append({
             "type": "image_url",
             "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "low"},
@@ -91,7 +138,6 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
             "text": "\n\nNOTE: No evidence screenshots provided. Mark screenshot relevance as FAIL.",
         })
 
-    # 3. Call GPT vision for verification
     llm = AsyncOpenAI(api_key=openai_key)
     try:
         resp = await llm.chat.completions.create(
@@ -101,38 +147,53 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
         )
         review = json.loads(resp.choices[0].message.content)
     except Exception as exc:
-        print(f"Verification LLM call failed: {exc}")
+        log(f"Verification LLM call failed: {exc}")
+        log("VERDICT: FAIL — Verification error")
+        _write_log(log_path, log_lines)
         return False
 
-    # 4. Print results
     passed = review.get("pass", False)
     score = review.get("score", 0)
     issues = review.get("issues", [])
     details = review.get("details", "")
 
-    print(f"{'PASS' if passed else 'FAIL'} (score: {score}/100)")
+    log(f"Score: {score}/100")
+    log(f"VERDICT: {'PASS' if passed else 'FAIL'}")
     if issues:
-        print(f"Issues:")
+        log("Issues:")
         for issue in issues:
-            print(f"  - {issue}")
+            log(f"  - {issue}")
     if details:
-        print(f"Details: {details}")
-    print()
+        log(f"Details: {details}")
+
+    # 6. Save screenshot files for review
+    for i, b64 in enumerate(screenshots):
+        img_path = os.path.join(log_dir, f"test_{task_id[:8]}_screenshot_{i+1}.png")
+        with open(img_path, "wb") as f:
+            f.write(base64.b64decode(b64))
+        log(f"Screenshot {i+1} saved: {img_path}")
+
+    _write_log(log_path, log_lines)
     return passed
+
+
+def _write_log(path: str, lines: list):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"\nLog saved: {path}")
 
 
 async def main():
     if len(sys.argv) < 2:
         print("Usage: python test_verify.py <task_id> [task_id2 ...]")
         print("  Env vars: DEMO_API_KEY, OPENAI_API_KEY")
+        print(f"  Logs saved to: test_logs/test_<task_id>.log")
         sys.exit(1)
 
-    import os
     api_key = os.environ.get("DEMO_API_KEY", "a5a6541b-5ee9-426e-95f8-437aa5d77374")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
 
     if not openai_key:
-        # Try reading from .env
         try:
             with open(".env") as f:
                 for line in f:
@@ -151,12 +212,14 @@ async def main():
         passed = await verify_task(tid, api_key, openai_key)
         results.append((tid[:8], passed))
 
+    print()
     print("=" * 50)
     print("VERIFICATION SUMMARY:")
     for tid, passed in results:
         print(f"  {tid}: {'PASS' if passed else 'FAIL'}")
     total_pass = sum(1 for _, p in results if p)
     print(f"\n  {total_pass}/{len(results)} passed")
+    print(f"  Logs: test_logs/")
 
 
 if __name__ == "__main__":
