@@ -168,6 +168,7 @@ class AgentRunner:
         self._recent_actions: List[str] = []  # track for loop detection
         self._evidence: List[str] = []  # collected screenshots (base64)
         self._evidence_hashes: set = set()  # dedup by size
+        self._downloads: List[Dict[str, str]] = []  # {filename, url, size}
 
     # ------------------------------------------------------------------
     # Public entry point (called as a FastAPI background task)
@@ -208,9 +209,7 @@ class AgentRunner:
                 except Exception:
                     pass
 
-                self.task.result_data = {"summary": summary, "complete": False}
-                if self._evidence:
-                    self.task.result_data["screenshots"] = self._evidence
+                self._set_result(summary, complete=False)
                 await self._log(f"Done (timed out): {summary[:200]}")
                 await self._set_status("completed")
 
@@ -222,11 +221,10 @@ class AgentRunner:
         # Check quota before starting
         if self._using_system_key and not self.user.has_budget:
             await self._log("Quota exhausted. Add your own OpenAI API key to continue.")
-            self.task.result_data = {
-                "summary": "Your free quota ($10.00) has been used up. Go to Settings and add your own OpenAI API key.",
-                "complete": False,
-                "quota_exhausted": True,
-            }
+            self._set_result(
+                "Your free quota ($10.00) has been used up. Go to Settings and add your own OpenAI API key.",
+                complete=False, quota_exhausted=True,
+            )
             await self._set_status("completed")
             return
 
@@ -270,6 +268,7 @@ class AgentRunner:
                 self._messages.extend(self.task.messages)
                 self._messages.append({"role": "user", "content": self._follow_up})
                 await self._set_status("running")
+                await self._log(f"── Follow-up ──")
                 await self._log(f"Continuing task with: {self._follow_up[:100]}")
             else:
                 self._messages = [
@@ -318,14 +317,11 @@ class AgentRunner:
                     # Check quota (system key only)
                     if self._using_system_key and not self.user.has_budget:
                         await self._log("Quota exhausted. Please add your own OpenAI API key to continue.")
-                        self.task.result_data = {
-                            "summary": (
-                                "Your free quota ($10.00) has been used up. "
-                                "To continue using the service, go to Settings and add your own OpenAI API key."
-                            ),
-                            "complete": False,
-                            "quota_exhausted": True,
-                        }
+                        self._set_result(
+                            "Your free quota ($10.00) has been used up. "
+                            "To continue using the service, go to Settings and add your own OpenAI API key.",
+                            complete=False, quota_exhausted=True,
+                        )
                         await self._set_status("completed")
                         return
 
@@ -360,9 +356,7 @@ class AgentRunner:
                     final_b64 = await self._capture_evidence()
                     if final_b64:
                         self._add_evidence(final_b64)
-                    self.task.result_data = {"summary": raw_summary, "complete": True}
-                    if self._evidence:
-                        self.task.result_data["screenshots"] = self._evidence
+                    self._set_result(raw_summary, complete=True)
                     await self._set_status("completed")
                     break
 
@@ -460,6 +454,18 @@ class AgentRunner:
                                         executor._is_evidence_screenshot = False
                                     executor._last_screenshot_b64 = None
 
+                            # Track download URLs
+                            if name == "download_file" and tool_result and "Download URL:" in tool_result:
+                                import re
+                                dm = re.search(r"Downloaded: (.+?) \((.+?)\)", tool_result)
+                                um = re.search(r"Download URL: (.+)", tool_result)
+                                if dm and um:
+                                    self._downloads.append({
+                                        "filename": dm.group(1),
+                                        "size": dm.group(2),
+                                        "url": um.group(1).strip(),
+                                    })
+
                             # review_and_finalize stores its screenshot directly
                             if name == "review_and_finalize":
                                 rb64 = getattr(executor, "_review_screenshot_b64", None)
@@ -512,10 +518,7 @@ class AgentRunner:
                 final_b64 = await self._capture_evidence()
                 if final_b64:
                     self._add_evidence(final_b64)
-                result = {"summary": summary, "complete": False}
-                if self._evidence:
-                    result["screenshots"] = self._evidence
-                self.task.result_data = result
+                self._set_result(summary, complete=False)
                 await self._log(f"Done (incomplete): {summary}")
                 await self._set_status("completed")
 
@@ -641,7 +644,7 @@ class AgentRunner:
             os.makedirs(os.path.dirname(evidence_path), exist_ok=True)
             with open(evidence_path, "wb") as f:
                 f.write(raw)
-            await self._log(f"Evidence screenshot saved: {evidence_path}")
+            await self._log("Evidence screenshot saved.")
             return b64
         except Exception as exc:
             log.warning("Could not capture evidence screenshot: %s", exc)
@@ -777,6 +780,26 @@ class AgentRunner:
         finally:
             hitl_events.pop(task_id, None)
 
+    def _set_result(self, summary: str, complete: bool = True, **extra) -> None:
+        """Append a result round to task.result_data, preserving previous rounds."""
+        entry = {"summary": summary, "complete": complete, **extra}
+        if self._evidence:
+            entry["screenshots"] = list(self._evidence)
+        if self._downloads:
+            entry["downloads"] = list(self._downloads)
+
+        prev = self.task.result_data or {}
+        history = prev.get("history", [])
+
+        # If there's an existing top-level summary, archive it first
+        if prev.get("summary") and prev["summary"] != summary:
+            archived = {k: v for k, v in prev.items() if k != "history"}
+            history.append(archived)
+
+        # Set current result as top-level + keep history
+        entry["history"] = history
+        self.task.result_data = entry
+
     def _prune_old_screenshots(self, keep: int = 1) -> None:
         """Remove old screenshot messages from context to reduce token usage.
         Keeps the most recent `keep` screenshots."""
@@ -792,10 +815,10 @@ class AgentRunner:
                 indices.append(i)
         # Remove all but the most recent `keep`
         for idx in indices[:-keep] if len(indices) > keep else []:
-            # Replace image message with a text placeholder
+            # Replace with minimal user message (OpenAI requires alternating roles)
             self._messages[idx] = {
                 "role": "user",
-                "content": "(previous screenshot removed to save tokens)",
+                "content": "[screenshot pruned]",
             }
 
     async def _handle_cancellation(self) -> None:
@@ -823,9 +846,7 @@ class AgentRunner:
         except Exception:
             pass
 
-        self.task.result_data = {"summary": summary, "complete": False, "cancelled": True}
-        if self._evidence:
-            self.task.result_data["screenshots"] = self._evidence
+        self._set_result(summary, complete=False, cancelled=True)
         await self._log(f"Done (cancelled): {summary[:200]}")
         await self._set_status("completed")
 

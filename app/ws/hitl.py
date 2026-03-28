@@ -93,7 +93,8 @@ async def _send_loop(
     websocket: WebSocket, task_id: str, queue: asyncio.Queue
 ) -> None:
     try:
-        # Send current state immediately on connect
+        # Brief delay to let background agent start (avoids race with /continue)
+        await asyncio.sleep(0.5)
         task = await Task.find_one(Task.task_id == task_id)
         if task:
             await _send(websocket, {
@@ -102,7 +103,14 @@ async def _send_loop(
                 "logs": task.logs,
             })
             if task.status in ("completed", "failed"):
-                return
+                # Check if an agent is about to run (registered cancel event)
+                if task_id not in cancel_events:
+                    # Double-check after delay — agent background task may be starting
+                    await asyncio.sleep(2)
+                    if task_id not in cancel_events:
+                        task = await Task.find_one(Task.task_id == task_id)
+                        if task and task.status in ("completed", "failed"):
+                            return
 
         elapsed = 0.0
         while True:

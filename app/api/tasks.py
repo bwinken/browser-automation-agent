@@ -111,12 +111,30 @@ async def get_task(
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    # Build chat history: user prompts/follow-ups only (agent responses come from result_data)
+    chat_messages = []
+    seen_prompt = False
+    for m in (task.messages or []):
+        role = m.get("role")
+        content = m.get("content", "")
+        if role != "user" or not isinstance(content, str) or not content.strip():
+            continue
+        # Skip system-injected / internal messages
+        if content.startswith(("The task has timed out", "The user has cancelled", "You have reached the maximum", "(previous screenshot", "[screenshot pruned", "Here is the current browser")):
+            continue
+        # Skip the original prompt (already in task.prompt) — only include follow-ups
+        if not seen_prompt:
+            seen_prompt = True
+            continue
+        chat_messages.append({"role": "user", "content": content})
+
     return {
         "task_id": task.task_id,
         "prompt": task.prompt,
         "status": task.status,
         "logs": task.logs,
         "result_data": task.result_data,
+        "chat_messages": chat_messages,
         "has_history": bool(task.messages),
         "created_at": task.created_at.isoformat(),
     }

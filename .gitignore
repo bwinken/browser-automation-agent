@@ -7,3 +7,5 @@ __pycache__/
 venv/
 downloads/
 test_logs/
+*.png
+.playwright-mcp/

@@ -130,6 +130,8 @@
 
     /* Flat lines (meta, outside iterations) */
     .tl-flat { padding: 4px 10px; }
+    /* Follow-up separator */
+    .tl-followup { padding: 8px 10px; margin: 6px 0; border-top: 1px solid var(--accent); color: var(--accent); font-weight: 700; font-size: .8rem; }
 
     /* ── Badge ── */
     .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .76rem; font-weight: 600; }
@@ -527,7 +529,7 @@ curl -X DELETE https://your-host/api/task/TASK_ID \
 </div>
 
 <script>
-let ws = null, apiKey = '', currentTaskId = null;
+let ws = null, apiKey = '', currentTaskId = null, _lastShownSummary = null;
 const toolLines = [];
 
 // ── Auth ─────────────────────────────────────────────────────────
@@ -587,6 +589,9 @@ function onAuthSuccess(key, username) {
   loadHistory();
   loadQuota();
   checkAdmin();
+  // Restore last viewed task
+  const lastTask = localStorage.getItem('baas_current_task');
+  if (lastTask) viewTask(lastTask);
 }
 
 function doLogout() {
@@ -677,28 +682,29 @@ async function handleSend() {
     if (!r.ok) { addChat('system', 'Error: ' + (d.detail || JSON.stringify(d))); setBadge(realStatus); enableSend(); return; }
 
     currentTaskId = d.task_id;
+    localStorage.setItem('baas_current_task', currentTaskId);
     document.getElementById('taskIdLabel').textContent = 'Task: ' + currentTaskId.slice(0, 8) + '...';
     if (!canContinue) addToolLine('Task submitted: ' + currentTaskId, 'meta');
     connectWs(currentTaskId);
     loadHistory();
 
     // Safety: poll for result in case WS misses completion
-    if (canContinue) {
-      setTimeout(async () => {
-        try {
-          const pr = await fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
-          if (pr.ok) {
-            const pt = await pr.json();
-            if (pt.status === 'completed' || pt.status === 'failed') {
-              setBadge(pt.status);
-              enableSend();
-              if (pt.result_data) showStructuredResult(pt.result_data);
-              loadHistory();
-            }
+    setTimeout(async () => {
+      try {
+        const pr = await fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
+        if (pr.ok) {
+          const pt = await pr.json();
+          if ((pt.status === 'completed' || pt.status === 'failed') && pt.result_data && pt.result_data.summary !== _lastShownSummary) {
+            setBadge(pt.status);
+            enableSend();
+            _lastShownSummary = pt.result_data.summary;
+            showStructuredResult(pt.result_data);
+            loadHistory();
+            loadQuota();
           }
-        } catch {}
-      }, 8000);
-    }
+        }
+      } catch {}
+    }, 10000);
   } catch (e) { addChat('system', 'Network error: ' + e.message); setBadge('failed'); enableSend(); }
 }
 
@@ -756,9 +762,15 @@ function _connectWsInner(taskId) {
       enableSend();
       loadHistory();
       loadQuota();
+      // Append result (dedup: skip if same summary already shown)
       if (currentTaskId) {
         fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } })
-          .then(r => r.json()).then(t => { if (t.result_data) showStructuredResult(t.result_data); }).catch(() => {});
+          .then(r => r.json()).then(t => {
+            if (t.result_data && t.result_data.summary !== _lastShownSummary) {
+              _lastShownSummary = t.result_data.summary;
+              showStructuredResult(t.result_data);
+            }
+          }).catch(() => {});
       }
     }
   };
@@ -810,7 +822,22 @@ function renderMd(text) {
 
 // ── Structured result rendering ──────────────────────────────────
 function showStructuredResult(r) {
-  let html = `<div class="msg msg-agent"><div class="md-body">${renderMd(r.summary || '')}</div>`;
+  let html = '<div class="msg msg-agent">';
+
+  // Download links — prominent, at the top
+  if (r.downloads && r.downloads.length) {
+    r.downloads.forEach(d => {
+      const dlHref = d.url + (apiKey ? '?token=' + encodeURIComponent(apiKey) : '');
+      html += `<a href="${esc(dlHref)}" target="_blank" download style="display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#1a3a25,#0d2818);border:1px solid var(--accent2);border-radius:8px;padding:10px 14px;color:var(--accent2);text-decoration:none;font-size:.88rem;margin-bottom:10px;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">`
+        + `<span style="font-size:1.4rem">&#11015;</span>`
+        + `<span><strong>${esc(d.filename)}</strong><br><span style="color:var(--muted);font-size:.75rem">${esc(d.size)} — Click to download</span></span></a>`;
+    });
+  }
+
+  // Summary (markdown)
+  html += `<div class="md-body">${renderMd(r.summary || '')}</div>`;
+
+  // Evidence screenshots
   const shots = r.screenshots || (r.screenshot ? [r.screenshot] : []);
   if (shots.length) {
     html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">';
@@ -821,6 +848,7 @@ function showStructuredResult(r) {
     });
     html += '</div>';
   }
+
   if (r.url) html += `<div style="margin-top:6px;font-size:.72rem;color:var(--muted)">${esc(r.url)}</div>`;
   if (r.error) html += `<div style="margin-top:6px;color:var(--danger);font-size:.78rem">${esc(r.error)}</div>`;
   if (r.complete === false) html += `<div style="margin-top:6px;color:var(--warn);font-size:.72rem">Task incomplete — send a follow-up to continue.</div>`;
@@ -899,6 +927,7 @@ function classifyLine(t) {
   if (t.startsWith('Tool \u25c0')) return 'result';
   if (/\[ERROR:|fatal|error/i.test(t)) return 'err';
   if (/^\[iter \d+\]/.test(t)) return 'iter';
+  if (t.startsWith('\u2500\u2500 Follow-up')) return 'follow-up';
   return '';
 }
 
@@ -920,7 +949,11 @@ function renderToolLog() {
   const prelude = [];
 
   toolLines.forEach(({ text, cls }) => {
-    if (cls === 'iter') {
+    if (cls === 'follow-up') {
+      // Close current group, push separator
+      if (current) { groups.push(current); current = null; }
+      groups.push({ type: 'separator', text });
+    } else if (cls === 'iter') {
       const m = text.match(/^\[iter (\d+)\]/);
       if (current) groups.push(current);
       current = { iter: m ? m[1] : '?', tools: [], lines: [] };
@@ -942,6 +975,10 @@ function renderToolLog() {
   });
 
   groups.forEach((g, gi) => {
+    if (g.type === 'separator') {
+      html += `<div class="tl-followup">${esc(g.text)}</div>`;
+      return;
+    }
     const isLast = gi === groups.length - 1;
     const openCls = isLast ? ' open' : '';
     const tags = g.tools.length
@@ -1026,9 +1063,14 @@ function renderHistory(tasks, total) {
   el.innerHTML = html;
 }
 
+let _deleteInProgress = false;
 async function deleteTask(taskId) {
-  if (!confirm('Delete this task?')) return;
+  if (_deleteInProgress) return;
+  _deleteInProgress = true;
   try {
+    // Use setTimeout to escape any click event stack
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (!confirm('Delete this task?')) return;
     const r = await fetch('/api/task/' + taskId, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + apiKey },
@@ -1037,6 +1079,7 @@ async function deleteTask(taskId) {
     if (taskId === currentTaskId) newTask();
     loadHistory();
   } catch {}
+  finally { _deleteInProgress = false; }
 }
 
 async function viewTask(taskId) {
@@ -1046,12 +1089,31 @@ async function viewTask(taskId) {
     if (!r.ok) return;
     const t = await r.json();
     currentTaskId = t.task_id;
+    localStorage.setItem('baas_current_task', currentTaskId);
     document.getElementById('taskIdLabel').textContent = 'Task: ' + t.task_id.slice(0, 8) + '...';
     setBadge(t.status);
     document.getElementById('chatMessages').innerHTML = '';
     document.getElementById('quickExamples').style.display = 'none';
-    addChat('user', t.prompt || '');
-    if (t.result_data) showStructuredResult(t.result_data);
+
+    // Rebuild full conversation: interleave user messages with result rounds
+    const followUps = t.chat_messages || [];  // follow-up user messages (excludes original prompt)
+    const rd = t.result_data || {};
+    const history = rd.history || [];  // previous round results (oldest first)
+
+    // All user messages in order: [prompt, followUp1, followUp2, ...]
+    const allUserMsgs = [t.prompt || '', ...followUps.map(m => m.content)];
+    // All results in order: [round1, round2, ..., current]
+    const allResults = [...history];
+    if (rd.summary) allResults.push(rd);
+
+    // Interleave: user msg → result → user msg → result ...
+    const maxLen = Math.max(allUserMsgs.length, allResults.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (i < allUserMsgs.length) addChat('user', allUserMsgs[i]);
+      if (i < allResults.length) showStructuredResult(allResults[i]);
+    }
+    _lastShownSummary = rd.summary || null;
+
     syncToolLog(t.logs || []);
     closeWs();
     if (['running','pending','paused'].includes(t.status)) connectWs(t.task_id);
@@ -1117,6 +1179,8 @@ document.getElementById('credOverlay').addEventListener('click', e => { if (e.ta
 function newTask() {
   closeWs();
   currentTaskId = null;
+  _lastShownSummary = null;
+  localStorage.removeItem('baas_current_task');
   document.getElementById('chatMessages').innerHTML = '<div class="msg msg-system">Describe a task to get started, or pick an example below.</div>';
   clearToolLog();
   setBadge('idle');

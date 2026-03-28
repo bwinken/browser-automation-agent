@@ -104,11 +104,16 @@ from fastapi import Header, HTTPException
 from fastapi.responses import FileResponse
 
 @app.get("/downloads/{filename}")
-async def get_download(filename: str, authorization: str = Header(None)):
+async def get_download(filename: str, authorization: str = Header(None), token: str = None):
     if not settings.dev_mode:
-        if not authorization or not authorization.startswith("Bearer "):
+        # Support both Authorization header and ?token= query param
+        api_key = None
+        if authorization and authorization.startswith("Bearer "):
+            api_key = authorization.split(" ", 1)[1]
+        elif token:
+            api_key = token
+        if not api_key:
             raise HTTPException(status_code=401, detail="API key required")
-        api_key = authorization.split(" ", 1)[1]
         user = await User.find_one(User.api_key == api_key)
         if not user:
             raise HTTPException(status_code=403, detail="Invalid API key")

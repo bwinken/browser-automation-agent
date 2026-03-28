@@ -948,7 +948,12 @@ class PlaywrightToolExecutor:
         size = os.path.getsize(save_path)
         size_str = f"{size / 1024:.1f} KB" if size < 1_048_576 else f"{size / 1_048_576:.1f} MB"
         download_url = f"/downloads/{filename}"
-        return f"Downloaded: {filename} ({size_str})\nLocal path: {save_path}\nDownload URL: {download_url}"
+        return (
+            f"Downloaded: {filename} ({size_str})\n"
+            f"Download URL: {download_url}\n"
+            f"IMPORTANT: Include this download link in your final summary so the user can access the file. "
+            f"Never expose internal file paths to the user."
+        )
 
     async def review_and_finalize(self, planned_summary: str) -> str:
         """Take screenshot, return it for LLM vision review against planned summary."""
