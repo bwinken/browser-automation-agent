@@ -294,7 +294,9 @@ SKILLS = [
             "  - Indeed: a[href*='/rc/'] or [data-jk] for job cards.",
             "For salary data: many Taiwan jobs show '待遇面議'. Extract from parent container text with regex.",
             "Filters (experience, salary range, job type) are usually clickable tags/checkboxes, not <select>.",
-            "No login needed to SEARCH. Login only needed to apply or save jobs.",
+            "For job DETAIL pages: navigate to the job URL (e.g. /job/XXXXX on 104). The full JD, salary, requirements, and benefits are in the DOM — no login needed to read.",
+            "  Extract with evaluate_javascript or get_page_content: job title (h1), salary (工作待遇), location (上班地點), requirements (條件要求), job description (工作內容).",
+            "No login needed to SEARCH or VIEW details. Login only needed to apply or save jobs.",
         ],
     },
     {

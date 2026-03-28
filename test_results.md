@@ -100,6 +100,29 @@
 | Exchange Rate | 70 FAIL | **100 PASS** | ✅ |
 | **Total** | **2/5** | **4/5** | |
 
+---
+
+## Phase 3: Downloads & Multi-step Operations
+
+### Phase 3 Round 1
+
+| Test | Task ID | Score | Pass | Notes |
+|---|---|---|---|---|
+| TWSE CSV Download | 831afc52 | 100 | PASS | Click 'CSV 下載' button, file downloaded |
+| arXiv PDF Download | 05f57ca2 | 100 | PASS | Search → find PDF link → download_file(url=) |
+| THSR+TRA Comparison | da3cbedc | 70 | FAIL | TRA fare missing from summary |
+| 104 Job Detail | c1bf2b02 | 40 | FAIL | No evidence screenshots taken |
+| TWSE Investors + Download | 31a3bfa9 | 90 | PASS | API data + summary correct |
+
+**Result: 3/5 passed**
+
+### Phase 3 Open Issues
+
+- [ ] Cross-site comparison: agent must extract ALL requested fields from both sites
+- [ ] 104 detail page: agent must take evidence screenshot of the detail page
+
+---
+
 ### Phase 2 Lessons from MCP Exploration
 
 | Site | Key Finding | Added to Skills |
