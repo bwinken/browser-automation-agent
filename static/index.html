@@ -43,6 +43,13 @@
     /* ── Center: Chat ── */
     .chat-col { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
     .chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    /* Quick examples above input */
+    .quick-examples { padding: 8px 16px; border-top: 1px solid var(--border); }
+    .qe-label { font-size: .72rem; color: var(--muted); margin-bottom: 5px; }
+    .qe-row { display: flex; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+    .qe { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: .75rem; color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+    .qe:hover { border-color: var(--accent); color: var(--text); }
+
     .chat-input-bar { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
     .chat-input-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .95rem; padding: 10px 14px; outline: none; }
     .chat-input-bar input:focus { border-color: var(--accent); }
@@ -195,6 +202,32 @@
       padding: 3px 10px; cursor: pointer; margin-left: auto;
     }
     .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+    /* Quota + Settings */
+    .quota-bar { display: flex; align-items: center; gap: 10px; font-size: .78rem; color: var(--muted); }
+    .quota-amt { font-weight: 600; }
+    .quota-amt.low { color: var(--warn); }
+    .quota-amt.out { color: var(--danger); }
+    .settings-btn { background: none; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font-family: var(--mono); font-size: .72rem; padding: 3px 10px; cursor: pointer; }
+    .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+    /* Guide */
+    .guide-section { margin-bottom: 16px; }
+    .guide-section h3 { font-size: .92rem; color: var(--accent); margin-bottom: 6px; }
+    .guide-section p { font-size: .85rem; color: var(--text); margin-bottom: 8px; }
+    .guide-section ul { font-size: .85rem; margin: 6px 0 0 18px; }
+    .guide-section li { margin-bottom: 3px; }
+    .guide-section code { background: rgba(255,255,255,.06); padding: 1px 5px; border-radius: 3px; font-size: .82em; }
+    .guide-examples { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .guide-ex { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: .8rem; color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s; }
+    .guide-ex:hover { border-color: var(--accent); color: var(--text); }
+    .guide-code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: .78rem; line-height: 1.6; overflow-x: auto; white-space: pre; color: var(--text); }
+    /* Admin */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: .8rem; margin: 8px 0; }
+    .admin-table th, .admin-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+    .admin-table th { background: rgba(255,255,255,.04); font-size: .72rem; text-transform: uppercase; color: var(--muted); }
+    .admin-table td { font-size: .8rem; }
+    .admin-stat { display: inline-block; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; margin: 0 6px 6px 0; }
+    .admin-stat .val { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+    .admin-stat .lbl { font-size: .7rem; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -244,6 +277,12 @@
     <h1>&#9881; BaaS</h1>
     <span style="color:var(--muted);font-size:.78rem" id="taskIdLabel"></span>
     <span id="badge" class="badge badge-idle">idle</span>
+    <div class="quota-bar" id="quotaBar" style="display:none">
+      <span>Credit: $<span id="quotaAmt" class="quota-amt">10.00</span></span>
+      <button class="settings-btn" onclick="openSettings()">Settings</button>
+    </div>
+    <button class="settings-btn" onclick="openGuide()">Guide</button>
+    <button class="settings-btn" id="adminBtn" onclick="openAdmin()" style="display:none">Admin</button>
     <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">Logout</button>
   </header>
 
@@ -260,7 +299,25 @@
     <!-- Center: Chat -->
     <div class="chat-col">
       <div class="chat-messages" id="chatMessages">
-        <div class="msg msg-system">Describe a task to get started.</div>
+        <div class="msg msg-system">Describe a task to get started, or pick an example below.</div>
+      </div>
+      <div class="quick-examples" id="quickExamples">
+        <div class="qe-label">Try a verified example:</div>
+        <div class="qe-row">
+          <div class="qe" onclick="runExample(this)" data-prompt="Go to CWA (Central Weather Administration), find the 7-day weather forecast for Hsinchu County. List each day with high/low temperature and conditions.">7-day weather — Hsinchu</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Go to 104.com.tw and search for Python backend engineer jobs in Taipei. List the top 5 results with job title, company name, and salary range.">104 Jobs — Python Taipei</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Compare the price of AirPods Pro 2 on PCHome and Momo. Show the product name, price, and link from each site.">AirPods Pro 2 — PCHome vs Momo</div>
+        </div>
+        <div class="qe-row">
+          <div class="qe" onclick="runExample(this)" data-prompt="Go to TWSE and find today's institutional investor trading data (buy/sell/net) for the Taiwan stock market.">TWSE investors data</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Search Google Scholar for papers about LLM agents since 2024. List the top 3 results with title, authors, year, and citation count.">Scholar — LLM agents</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Go to Bank of Taiwan website and find today's USD/TWD exchange rate (cash buy/sell and spot buy/sell).">USD/TWD exchange rate</div>
+        </div>
+        <div class="qe-row">
+          <div class="qe" onclick="runExample(this)" data-prompt="Compare THSR and TRA train options from Hsinchu to Taipei for tomorrow around 1:00 PM. For each, find: departure time, arrival time, duration, and ticket price. Summarize in a comparison table.">THSR vs TRA — Hsinchu to Taipei</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Go to TWSE and download today's daily trading report as a CSV file.">Download TWSE CSV</div>
+          <div class="qe" onclick="runExample(this)" data-prompt="Search arXiv for a recent paper about 'browser automation with LLM' and download the PDF.">arXiv PDF download</div>
+        </div>
       </div>
       <div class="chat-input-bar">
         <input id="chatInput" type="text" placeholder="Describe a task or reply to the agent..." />
@@ -305,6 +362,166 @@
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeCredModal()">Cancel</button>
       <button class="btn-ok" onclick="sendCredentials()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2 style="color:var(--accent)">Settings</h2>
+    <div style="margin-bottom:14px">
+      <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">Your API Key</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+        <input id="settingsApiKey" type="password" readonly style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:.82rem;padding:7px 10px;outline:none" />
+        <button onclick="toggleApiKeyVis()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.72rem;padding:7px 8px;cursor:pointer" title="Show/Hide">&#128065;</button>
+        <button onclick="copyApiKey()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.72rem;padding:7px 8px;cursor:pointer" title="Copy">&#128203;</button>
+      </div>
+      <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">Usage</div>
+      <div style="font-size:.9rem">Spent: $<span id="settingsSpent">0.00</span> / $<span id="settingsQuota">10.00</span></div>
+      <div style="font-size:.9rem">Remaining: $<span id="settingsRemaining">10.00</span></div>
+      <div style="font-size:.82rem;color:var(--muted);margin-top:2px">Tokens used: <span id="settingsTokens">0</span></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">When your free credit runs out, add your own OpenAI API key to continue.</div>
+      <div class="cred-field">
+        <label>OpenAI API Key</label>
+        <input id="settingsKey" type="password" placeholder="sk-..." autocomplete="off" />
+      </div>
+      <div id="settingsKeyStatus" style="font-size:.78rem;margin-bottom:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeSettings()">Close</button>
+      <button class="btn-ok" onclick="saveOpenAIKey()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Modal -->
+<div class="overlay" id="adminOverlay">
+  <div class="modal" style="width:min(720px,95vw);max-height:85vh;overflow-y:auto">
+    <h2 style="color:var(--accent)">Admin Dashboard</h2>
+
+    <div id="adminStats" style="margin-bottom:10px"></div>
+
+    <h3 style="font-size:.88rem;color:var(--accent);margin:10px 0 6px">Users</h3>
+    <div id="adminUsers" style="overflow-x:auto"></div>
+
+    <h3 style="font-size:.88rem;color:var(--accent);margin:14px 0 6px">Invite Codes
+      <button onclick="genInvite()" style="background:var(--accent);color:#0d1117;border:none;border-radius:4px;font-family:var(--mono);font-size:.7rem;font-weight:700;padding:2px 10px;cursor:pointer;margin-left:8px">+ Generate</button>
+    </h3>
+    <div id="adminInvites" style="overflow-x:auto"></div>
+
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeAdmin()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Guide Modal -->
+<div class="overlay" id="guideOverlay">
+  <div class="modal" style="width:min(640px,95vw);max-height:85vh;overflow-y:auto">
+    <h2 style="color:var(--accent)">Guide</h2>
+
+    <div class="guide-section">
+      <h3>Chat Interface</h3>
+      <p>Type a task in natural language and the AI agent will execute it in a real browser. Click any example below to try it.</p>
+      <ul>
+        <li><b>+ New</b> &mdash; start a fresh conversation</li>
+        <li><b>Stop</b> &mdash; cancel a running task (partial results are saved)</li>
+        <li><b>Follow-up</b> &mdash; after a task completes, type another message to continue</li>
+        <li>The agent may <b>ask you questions</b> &mdash; answer inline or skip</li>
+        <li>Right panel shows real-time <b>tool execution</b> grouped by iteration</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>Verified Examples <span style="font-size:.72rem;color:var(--muted);font-weight:400">(click to run)</span></h3>
+
+      <div style="font-size:.78rem;color:var(--muted);margin:8px 0 4px">Simple Queries</div>
+      <div class="guide-examples">
+        <div class="guide-ex" onclick="runExample(this)">Go to CWA (Central Weather Administration), find the 7-day weather forecast for Hsinchu County. List each day with high/low temperature and conditions.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to 104.com.tw and search for Python backend engineer jobs in Taipei. List the top 5 results with job title, company name, and salary range.</div>
+        <div class="guide-ex" onclick="runExample(this)">Compare the price of AirPods Pro 2 on PCHome and Momo. Show the product name, price, and link from each site.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to TWSE and find today's institutional investor trading data (buy/sell/net) for the Taiwan stock market.</div>
+        <div class="guide-ex" onclick="runExample(this)">Search Google Scholar for papers about LLM agents since 2024. List the top 3 results with title, authors, year, and citation count.</div>
+      </div>
+
+      <div style="font-size:.78rem;color:var(--muted);margin:8px 0 4px">Complex Operations</div>
+      <div class="guide-examples">
+        <div class="guide-ex" onclick="runExample(this)">Go to the TRA (Taiwan Railway) website, search for trains from Hsinchu to Taipei tomorrow around 1:00 PM. List the first 3 trains with departure, arrival, duration, and train type.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to booking.com, search for hotels in Taipei for next weekend (2 nights, 2 adults). List the top 3 options with name, rating, and price per night.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to findbiz.nat.gov.tw, search for company registration info for "台積電". Extract company name, registration number, capital, and representative.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to Bank of Taiwan website and find today's USD/TWD exchange rate (cash buy/sell and spot buy/sell).</div>
+      </div>
+
+      <div style="font-size:.78rem;color:var(--muted);margin:8px 0 4px">Downloads &amp; Multi-step</div>
+      <div class="guide-examples">
+        <div class="guide-ex" onclick="runExample(this)">Go to TWSE and download today's daily trading report as a CSV file.</div>
+        <div class="guide-ex" onclick="runExample(this)">Search arXiv for a recent paper about "browser automation with LLM" and download the PDF.</div>
+        <div class="guide-ex" onclick="runExample(this)">Compare THSR and TRA train options from Hsinchu to Taipei for tomorrow around 1:00 PM. For each, find: departure time, arrival time, duration, and ticket price. Summarize in a comparison table.</div>
+        <div class="guide-ex" onclick="runExample(this)">Go to 104.com.tw, search for "Python backend engineer" jobs in Taipei. Find the first result, click into the detail page, and extract: job title, company name, salary range, required experience, and job description summary.</div>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h3>REST API</h3>
+      <p>Use your API key (found in Settings) to call the API programmatically.</p>
+      <pre class="guide-code"># Create a task
+curl -X POST https://your-host/api/task \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"prompt": "Search for ..."}'
+
+# Check task status
+curl https://your-host/api/task/TASK_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Continue a completed task
+curl -X POST https://your-host/api/task/TASK_ID/continue \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"message": "Now also check ..."}'
+
+# Cancel a running task
+curl -X POST https://your-host/api/task/TASK_ID/cancel \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# List tasks (paginated)
+curl "https://your-host/api/task?skip=0&amp;limit=10" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Delete a task
+curl -X DELETE https://your-host/api/task/TASK_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"</pre>
+    </div>
+
+    <div class="guide-section">
+      <h3>WebSocket (Real-time)</h3>
+      <p>Connect to <code>ws://your-host/ws/task/TASK_ID</code> to stream logs and status updates.</p>
+      <pre class="guide-code"># Messages from server:
+{"type": "log", "message": "...", "status": "running"}
+{"type": "status", "status": "completed", "logs": [...]}
+{"type": "ask_user", "question": "...", "mode": "text"}
+{"type": "heartbeat"}
+
+# Send to server:
+{"type": "hitl_response", "response": "user answer"}
+{"type": "cancel"}</pre>
+    </div>
+
+    <div class="guide-section">
+      <h3>Quota</h3>
+      <ul>
+        <li>Each account gets <b>$10.00</b> free credit</li>
+        <li>Usage is calculated per LLM call (input + output tokens)</li>
+        <li>When credit runs out, add your own <b>OpenAI API key</b> in Settings</li>
+        <li>With your own key, there is no quota limit &mdash; costs go to your OpenAI account</li>
+      </ul>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-ok" onclick="closeGuide()">Got it</button>
     </div>
   </div>
 </div>
@@ -368,6 +585,8 @@ function onAuthSuccess(key, username) {
   document.getElementById('logoutBtn').style.display = '';
   document.getElementById('logoutBtn').textContent = username + ' \u2022 Logout';
   loadHistory();
+  loadQuota();
+  checkAdmin();
 }
 
 function doLogout() {
@@ -434,6 +653,7 @@ async function handleSend() {
   closeWs();
   setBadge('pending');
   document.getElementById('sendBtn').disabled = true;
+  document.getElementById('quickExamples').style.display = 'none';
 
   try {
     let url, reqBody;
@@ -535,6 +755,7 @@ function _connectWsInner(taskId) {
     if (msg.status === 'completed' || msg.status === 'failed') {
       enableSend();
       loadHistory();
+      loadQuota();
       if (currentTaskId) {
         fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } })
           .then(r => r.json()).then(t => { if (t.result_data) showStructuredResult(t.result_data); }).catch(() => {});
@@ -828,6 +1049,7 @@ async function viewTask(taskId) {
     document.getElementById('taskIdLabel').textContent = 'Task: ' + t.task_id.slice(0, 8) + '...';
     setBadge(t.status);
     document.getElementById('chatMessages').innerHTML = '';
+    document.getElementById('quickExamples').style.display = 'none';
     addChat('user', t.prompt || '');
     if (t.result_data) showStructuredResult(t.result_data);
     syncToolLog(t.logs || []);
@@ -895,13 +1117,197 @@ document.getElementById('credOverlay').addEventListener('click', e => { if (e.ta
 function newTask() {
   closeWs();
   currentTaskId = null;
-  document.getElementById('chatMessages').innerHTML = '<div class="msg msg-system">Describe a task to get started.</div>';
+  document.getElementById('chatMessages').innerHTML = '<div class="msg msg-system">Describe a task to get started, or pick an example below.</div>';
   clearToolLog();
   setBadge('idle');
   enableSend();
   document.getElementById('taskIdLabel').textContent = '';
   document.getElementById('chatInput').focus();
   document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('quickExamples').style.display = '';
+}
+
+// ── Quota + Settings ─────────────────────────────────────────────
+async function loadQuota() {
+  if (!apiKey) return;
+  try {
+    const r = await fetch('/api/users/me', { headers: { 'Authorization': 'Bearer ' + apiKey } });
+    if (!r.ok) return;
+    const d = await r.json();
+    const remaining = d.remaining_usd;
+    const el = document.getElementById('quotaAmt');
+    el.textContent = remaining.toFixed(2);
+    el.className = 'quota-amt' + (remaining <= 0 ? ' out' : remaining < 2 ? ' low' : '');
+    document.getElementById('quotaBar').style.display = 'flex';
+    // If has custom key, show differently
+    if (d.has_custom_key) {
+      el.parentElement.innerHTML = 'Using your own key';
+    }
+  } catch {}
+}
+
+function openSettings() {
+  const keyInput = document.getElementById('settingsApiKey');
+  keyInput.value = apiKey;
+  keyInput.type = 'password';
+  fetch('/api/users/me', { headers: { 'Authorization': 'Bearer ' + apiKey } })
+    .then(r => r.json()).then(d => {
+      document.getElementById('settingsSpent').textContent = d.spent_usd.toFixed(4);
+      document.getElementById('settingsQuota').textContent = d.quota_usd.toFixed(2);
+      document.getElementById('settingsRemaining').textContent = d.remaining_usd.toFixed(4);
+      document.getElementById('settingsTokens').textContent = d.token_usage.toLocaleString();
+      document.getElementById('settingsKeyStatus').textContent = d.has_custom_key ? 'Custom key is set.' : '';
+      document.getElementById('settingsKeyStatus').style.color = d.has_custom_key ? 'var(--accent2)' : '';
+      document.getElementById('settingsKey').value = '';
+    }).catch(() => {});
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function toggleApiKeyVis() {
+  const el = document.getElementById('settingsApiKey');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+function copyApiKey() {
+  navigator.clipboard.writeText(apiKey).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '\u2713';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+document.getElementById('settingsOverlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeSettings(); });
+
+async function saveOpenAIKey() {
+  const key = document.getElementById('settingsKey').value.trim();
+  const statusEl = document.getElementById('settingsKeyStatus');
+  try {
+    const r = await fetch('/api/users/me/openai-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({ openai_key: key }),
+    });
+    const d = await r.json();
+    if (!r.ok) { statusEl.textContent = d.detail || 'Error'; statusEl.style.color = 'var(--danger)'; return; }
+    statusEl.textContent = d.message;
+    statusEl.style.color = 'var(--accent2)';
+    loadQuota();
+  } catch (e) { statusEl.textContent = 'Network error'; statusEl.style.color = 'var(--danger)'; }
+}
+
+// ── Admin ────────────────────────────────────────────────────────
+let _isAdmin = false;
+
+async function checkAdmin() {
+  if (!apiKey) return;
+  try {
+    const r = await fetch('/api/users/me', { headers: { 'Authorization': 'Bearer ' + apiKey } });
+    if (!r.ok) return;
+    const d = await r.json();
+    _isAdmin = d.is_admin;
+    document.getElementById('adminBtn').style.display = _isAdmin ? '' : 'none';
+  } catch {}
+}
+
+async function openAdmin() {
+  document.getElementById('adminOverlay').classList.add('open');
+  // Load all data in parallel
+  const h = { 'Authorization': 'Bearer ' + apiKey };
+  const [stats, users, invites] = await Promise.all([
+    fetch('/api/users/admin/stats', { headers: h }).then(r => r.json()).catch(() => null),
+    fetch('/api/users/admin/users', { headers: h }).then(r => r.json()).catch(() => []),
+    fetch('/api/users/admin/invites', { headers: h }).then(r => r.json()).catch(() => []),
+  ]);
+
+  // Stats
+  if (stats) {
+    document.getElementById('adminStats').innerHTML = [
+      { val: stats.total_users, lbl: 'Users' },
+      { val: stats.total_tasks, lbl: 'Tasks' },
+      { val: '$' + stats.total_spent_usd.toFixed(2), lbl: 'Total Spent' },
+      { val: stats.total_tokens.toLocaleString(), lbl: 'Total Tokens' },
+    ].map(s => `<div class="admin-stat"><div class="val">${s.val}</div><div class="lbl">${s.lbl}</div></div>`).join('');
+  }
+
+  // Users table
+  let uh = '<table class="admin-table"><tr><th>User</th><th>Admin</th><th>Spent</th><th>Remaining</th><th>Tokens</th><th>Own Key</th><th>Quota</th></tr>';
+  users.forEach(u => {
+    const cls = u.remaining_usd <= 0 ? 'color:var(--danger)' : u.remaining_usd < 2 ? 'color:var(--warn)' : '';
+    uh += `<tr>
+      <td>${esc(u.username)}</td>
+      <td>${u.is_admin ? 'Y' : ''}</td>
+      <td>$${u.spent_usd.toFixed(2)}</td>
+      <td style="${cls}">$${u.remaining_usd.toFixed(2)}</td>
+      <td>${u.token_usage.toLocaleString()}</td>
+      <td>${u.has_custom_key ? 'Y' : ''}</td>
+      <td><input type="number" value="${u.quota_usd}" step="1" min="0" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.78rem;padding:2px 4px" onchange="setQuota('${esc(u.username)}',this.value)" /></td>
+    </tr>`;
+  });
+  uh += '</table>';
+  document.getElementById('adminUsers').innerHTML = uh;
+
+  // Invites table
+  renderInvites(invites);
+}
+
+function renderInvites(invites) {
+  let ih = '<table class="admin-table"><tr><th>Code</th><th>Status</th><th>Used By</th><th>Created</th></tr>';
+  invites.forEach(inv => {
+    const status = inv.used ? '<span style="color:var(--muted)">Used</span>' : '<span style="color:var(--accent2)">Available</span>';
+    const created = new Date(inv.created_at).toLocaleDateString();
+    ih += `<tr>
+      <td style="font-family:var(--mono);font-size:.78rem;user-select:all">${esc(inv.code)}</td>
+      <td>${status}</td>
+      <td>${esc(inv.used_by || '')}</td>
+      <td>${created}</td>
+    </tr>`;
+  });
+  ih += '</table>';
+  document.getElementById('adminInvites').innerHTML = ih;
+}
+
+function closeAdmin() { document.getElementById('adminOverlay').classList.remove('open'); }
+document.getElementById('adminOverlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeAdmin(); });
+
+async function setQuota(username, val) {
+  try {
+    await fetch('/api/users/admin/quota', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({ username, quota_usd: parseFloat(val) }),
+    });
+  } catch {}
+}
+
+async function genInvite() {
+  try {
+    const r = await fetch('/api/users/admin/invite', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+    });
+    const d = await r.json();
+    if (d.code) {
+      // Refresh invites list
+      const inv = await fetch('/api/users/admin/invites', { headers: { 'Authorization': 'Bearer ' + apiKey } }).then(r => r.json());
+      renderInvites(inv);
+    }
+  } catch {}
+}
+
+// ── Guide ────────────────────────────────────────────────────────
+function openGuide() { document.getElementById('guideOverlay').classList.add('open'); }
+function closeGuide() { document.getElementById('guideOverlay').classList.remove('open'); }
+document.getElementById('guideOverlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeGuide(); });
+
+function useExample(el) {
+  closeGuide();
+  document.getElementById('chatInput').value = el.textContent;
+  document.getElementById('chatInput').focus();
+}
+function runExample(el) {
+  closeGuide();
+  newTask();
+  document.getElementById('chatInput').value = el.dataset.prompt || el.textContent;
+  handleSend();
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

@@ -11,3 +11,4 @@ python-multipart==0.0.9
 pydantic-settings>=2.3.0
 httpx>=0.23.0,<0.28.0
 playwright-stealth>=2.0.0
+cryptography>=42.0.0

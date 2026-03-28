@@ -12,6 +12,31 @@ class User(Document):
     api_key: str = Field(default_factory=lambda: str(uuid.uuid4()))
     is_admin: bool = False
     token_usage: int = 0
+    quota_usd: float = 10.0       # free credit in USD
+    spent_usd: float = 0.0        # total spent so far
+    encrypted_openai_key: str = "" # encrypted with Fernet (SECRET_KEY)
+
+    @property
+    def custom_openai_key(self) -> str:
+        if not self.encrypted_openai_key:
+            return ""
+        from app.crypto import decrypt
+        return decrypt(self.encrypted_openai_key)
+
+    def set_openai_key(self, plaintext_key: str) -> None:
+        if not plaintext_key:
+            self.encrypted_openai_key = ""
+            return
+        from app.crypto import encrypt
+        self.encrypted_openai_key = encrypt(plaintext_key)
+
+    @property
+    def remaining_usd(self) -> float:
+        return max(0.0, self.quota_usd - self.spent_usd)
+
+    @property
+    def has_budget(self) -> bool:
+        return self.remaining_usd > 0 or bool(self.encrypted_openai_key)
 
     class Settings:
         name = "users"

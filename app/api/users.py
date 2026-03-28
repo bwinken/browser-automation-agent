@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.auth import get_admin_user, hash_password, verify_password
+from app.auth import get_admin_user, get_current_user, hash_password, verify_password
 from app.models import InviteCode, User
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -63,7 +63,88 @@ async def login(body: LoginRequest):
     return {"username": user.username, "api_key": user.api_key}
 
 
+# ── Account / Quota ─────────────────────────────────────────────
+
+@router.get("/me")
+async def get_me(user: User = Depends(get_current_user)):
+    return {
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "token_usage": user.token_usage,
+        "quota_usd": user.quota_usd,
+        "spent_usd": round(user.spent_usd, 4),
+        "remaining_usd": round(user.remaining_usd, 4),
+        "has_custom_key": bool(user.encrypted_openai_key),
+    }
+
+
+class SetKeyRequest(BaseModel):
+    openai_key: str
+
+
+@router.post("/me/openai-key")
+async def set_openai_key(body: SetKeyRequest, user: User = Depends(get_current_user)):
+    key = body.openai_key.strip()
+    if key and not key.startswith("sk-"):
+        raise HTTPException(status_code=400, detail="Invalid OpenAI API key format (must start with sk-)")
+    user.set_openai_key(key)
+    await user.save()
+    return {
+        "has_custom_key": bool(key),
+        "message": "Custom OpenAI key saved." if key else "Custom key removed. Using system quota.",
+    }
+
+
 # ── Admin endpoints ─────────────────────────────────────────────
+
+@router.get("/admin/users")
+async def list_users(admin: User = Depends(get_admin_user)):
+    users = await User.find_all().sort(-User.token_usage).to_list()
+    return [
+        {
+            "username": u.username,
+            "is_admin": u.is_admin,
+            "token_usage": u.token_usage,
+            "quota_usd": u.quota_usd,
+            "spent_usd": round(u.spent_usd, 4),
+            "remaining_usd": round(u.remaining_usd, 4),
+            "has_custom_key": bool(u.encrypted_openai_key),
+            "api_key_prefix": u.api_key[:8] + "...",
+        }
+        for u in users
+    ]
+
+
+class SetQuotaRequest(BaseModel):
+    username: str
+    quota_usd: float
+
+
+@router.post("/admin/quota")
+async def set_user_quota(body: SetQuotaRequest, admin: User = Depends(get_admin_user)):
+    user = await User.find_one(User.username == body.username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.quota_usd = body.quota_usd
+    await user.save()
+    return {"username": user.username, "quota_usd": user.quota_usd}
+
+
+@router.get("/admin/stats")
+async def admin_stats(admin: User = Depends(get_admin_user)):
+    from app.models import Task
+    total_users = await User.find_all().count()
+    total_tasks = await Task.find_all().count()
+    all_users = await User.find_all().to_list()
+    total_spent = sum(u.spent_usd for u in all_users)
+    total_tokens = sum(u.token_usage for u in all_users)
+    return {
+        "total_users": total_users,
+        "total_tasks": total_tasks,
+        "total_spent_usd": round(total_spent, 4),
+        "total_tokens": total_tokens,
+    }
+
 
 @router.post("/admin/invite", status_code=201)
 async def create_invite(admin: User = Depends(get_admin_user)):

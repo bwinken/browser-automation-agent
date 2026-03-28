@@ -29,6 +29,12 @@ async def create_task(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
 ):
+    if not user.has_budget:
+        raise HTTPException(
+            status_code=402,
+            detail="Quota exhausted. Add your own OpenAI API key in Settings to continue.",
+        )
+
     task = Task(user_id=user.id, prompt=body.prompt)
     await task.insert()
 

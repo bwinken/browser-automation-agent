@@ -128,6 +128,27 @@ def _build_system_prompt() -> str:
     return _SYSTEM_PROMPT_TEMPLATE.format(today=date.today().isoformat()) + _skill_catalogue
 
 
+# Pricing per 1M tokens (USD) — source: https://openai.com/api/pricing/
+_MODEL_PRICING = {
+    "gpt-4o":        {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini":   {"input": 0.15, "output": 0.60},
+    "gpt-4.1":       {"input": 2.00, "output": 8.00},
+    "gpt-4.1-mini":  {"input": 0.40, "output": 1.60},
+    "gpt-4.1-nano":  {"input": 0.10, "output": 0.40},
+    "gpt-5.4":       {"input": 2.50, "output": 15.00},
+    "gpt-5.4-mini":  {"input": 0.75, "output": 4.50},
+    "gpt-5.4-nano":  {"input": 0.20, "output": 1.25},
+}
+
+
+def _calc_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Calculate USD cost for a single LLM call."""
+    pricing = _MODEL_PRICING.get(model, _MODEL_PRICING.get("gpt-4o"))
+    cost = (prompt_tokens / 1_000_000) * pricing["input"] + \
+           (completion_tokens / 1_000_000) * pricing["output"]
+    return round(cost, 6)
+
+
 class AgentRunner:
     """Runs the full agent loop for a single Task document."""
 
@@ -138,7 +159,10 @@ class AgentRunner:
         self.task = task
         self.user = user
         self._follow_up = follow_up  # new user message for continuation
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=120.0)
+        # Use custom key if user has one, otherwise system key
+        api_key = user.custom_openai_key or settings.openai_api_key
+        self._client = AsyncOpenAI(api_key=api_key, timeout=120.0)
+        self._using_system_key = not bool(user.custom_openai_key)
         self._messages: List[Dict[str, Any]] = []
         self._page = None  # set inside run() for HITL screenshot access
         self._recent_actions: List[str] = []  # track for loop detection
@@ -195,10 +219,20 @@ class AgentRunner:
     # ------------------------------------------------------------------
 
     async def _run_with_playwright(self, pw) -> None:
+        # Check quota before starting
+        if self._using_system_key and not self.user.has_budget:
+            await self._log("Quota exhausted. Add your own OpenAI API key to continue.")
+            self.task.result_data = {
+                "summary": "Your free quota ($10.00) has been used up. Go to Settings and add your own OpenAI API key.",
+                "complete": False,
+                "quota_exhausted": True,
+            }
+            await self._set_status("completed")
+            return
+
         # Ensure download directory exists
         download_path = os.path.abspath(settings.download_dir)
         os.makedirs(download_path, exist_ok=True)
-
 
         browser = await pw.chromium.launch(
             headless=settings.headless,
@@ -269,10 +303,31 @@ class AgentRunner:
                 )
                 msg = response.choices[0].message
 
-                # Track token usage
+                # Track token usage + cost
                 if response.usage:
                     self.user.token_usage += response.usage.total_tokens
+                    if self._using_system_key:
+                        cost = _calc_cost(
+                            settings.openai_model,
+                            response.usage.prompt_tokens,
+                            response.usage.completion_tokens,
+                        )
+                        self.user.spent_usd += cost
                     await self.user.save()
+
+                    # Check quota (system key only)
+                    if self._using_system_key and not self.user.has_budget:
+                        await self._log("Quota exhausted. Please add your own OpenAI API key to continue.")
+                        self.task.result_data = {
+                            "summary": (
+                                "Your free quota ($10.00) has been used up. "
+                                "To continue using the service, go to Settings and add your own OpenAI API key."
+                            ),
+                            "complete": False,
+                            "quota_exhausted": True,
+                        }
+                        await self._set_status("completed")
+                        return
 
                 # Append assistant turn
                 assistant_turn: Dict[str, Any] = {
@@ -385,13 +440,17 @@ class AgentRunner:
                             if name == "take_screenshot":
                                 b64 = getattr(executor, "_last_screenshot_b64", None)
                                 if b64:
+                                    # Remove old screenshots from context to save tokens
+                                    # Keep only the most recent one — new one replaces it
+                                    self._prune_old_screenshots()
+
                                     deferred_messages.append({
                                         "role": "user",
                                         "content": [
                                             {"type": "text", "text": "Here is the current browser screenshot:"},
                                             {"type": "image_url", "image_url": {
                                                 "url": f"data:image/png;base64,{b64}",
-                                                "detail": "auto",
+                                                "detail": "low",
                                             }},
                                         ],
                                     })
@@ -717,6 +776,27 @@ class AgentRunner:
             return "Credential request timed out. Use request_human_assistance as fallback."
         finally:
             hitl_events.pop(task_id, None)
+
+    def _prune_old_screenshots(self, keep: int = 1) -> None:
+        """Remove old screenshot messages from context to reduce token usage.
+        Keeps the most recent `keep` screenshots."""
+        indices = []
+        for i, m in enumerate(self._messages):
+            if not isinstance(m, dict) or m.get("role") != "user":
+                continue
+            content = m.get("content")
+            if isinstance(content, list) and any(
+                isinstance(c, dict) and c.get("type") == "image_url"
+                for c in content
+            ):
+                indices.append(i)
+        # Remove all but the most recent `keep`
+        for idx in indices[:-keep] if len(indices) > keep else []:
+            # Replace image message with a text placeholder
+            self._messages[idx] = {
+                "role": "user",
+                "content": "(previous screenshot removed to save tokens)",
+            }
 
     async def _handle_cancellation(self) -> None:
         """Generate partial summary and mark task as cancelled."""

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     headless: bool = True
     dev_mode: bool = False
     log_level: str = "INFO"
+    default_quota_usd: float = 10.0
 
     class Config:
         env_file = ".env"
