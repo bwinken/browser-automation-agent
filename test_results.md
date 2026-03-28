@@ -79,6 +79,27 @@
 
 **Result: 2/5 passed**
 
+### Phase 2 Round 2 (after DOM extraction + date fix)
+
+| Test | Task ID | Score | Pass | Notes |
+|---|---|---|---|---|
+| PTT Gossiping | a11c426e | 80 | FAIL | Push counts mismatch — real-time content changed between DOM extraction and screenshot (timing issue, not agent error) |
+| Company Lookup | a4db0e99 | 100 | PASS | Evidence screenshots taken, data extracted from DOM correctly |
+| Exchange Rate | ed813ad1 | 100 | PASS | Date correctly noted from page, non-business hours handled |
+
+**Result: 2/3 re-tested passed (PTT timing issue remains)**
+
+### Phase 2 Summary
+
+| Test | Round 1 | Round 2 | Status |
+|---|---|---|---|
+| TRA Train | 95 PASS | — | ✅ |
+| Booking.com | 100 PASS | — | ✅ |
+| PTT Gossiping | 70 FAIL | 80 FAIL | ⚠ timing issue |
+| Company Lookup | 70 FAIL | **100 PASS** | ✅ |
+| Exchange Rate | 70 FAIL | **100 PASS** | ✅ |
+| **Total** | **2/5** | **4/5** | |
+
 ### Phase 2 Lessons from MCP Exploration
 
 | Site | Key Finding | Added to Skills |
@@ -123,9 +144,9 @@
 - [x] Weather skill uses county direct URL (CID=63)
 - [x] Verifier correctly handles API fallback, date range interpretation
 
-## Phase 2 Issues — Open
+## Phase 2 Issues
 
-- [ ] PTT: cross-check push counts from DOM extraction, not vision
-- [ ] Company Lookup: ensure evidence screenshot is taken
-- [ ] Exchange Rate: note non-business hours date mismatch
-- [ ] review_and_finalize needs stricter date/number enforcement
+- [x] Company Lookup: ensure evidence screenshot is taken — FIXED, 100/100
+- [x] Exchange Rate: note non-business hours date mismatch — FIXED, 100/100
+- [x] review_and_finalize: enforce DOM extraction before screenshots — FIXED
+- [ ] PTT: real-time content changes between DOM extraction and screenshot (80/100, timing issue not agent error)

@@ -104,17 +104,16 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
   those buttons are usually SVG icons with no text content, impossible to locate by text. \
   If Escape doesn't work, try: click('[aria-label=\"Close\"]') or click('button[class*=\"close\"]').
 - If an action fails, read the [ERROR:...] tag and change approach. Never repeat the same failure.
-- EVIDENCE FLOW (follow this order):
-  1. CONFIRM data first: use get_page_content or evaluate_javascript to extract the key results \
-     (names, prices, times, etc). Write them down in your reasoning.
-  2. RELEVANCE CHECK: verify each result actually matches the search query. \
-     If searching for "AirPods Pro 2", ensure results ARE AirPods Pro 2, not cases or accessories. \
-     Skip irrelevant items and note them as filtered out.
-  3. SCREENSHOT: if results span multiple screens, scroll + take_screenshot multiple times \
-     so evidence covers ALL items in your summary. One screenshot per "screen-full" of data.
-  4. REVIEW: call review_and_finalize with your draft summary. Every number, name, date \
-     MUST exactly match the screenshot. If errors found, fix and review again.
-  5. Only write your final summary AFTER the review confirms "All verified".
+- EVIDENCE FLOW (follow this order strictly):
+  1. EXTRACT data via code: use evaluate_javascript to pull exact numbers, names, dates from the DOM. \
+     Write them in your reasoning. NEVER guess numbers from screenshots — always extract from DOM first.
+  2. RELEVANCE CHECK: verify each result matches the search query. Skip irrelevant items.
+  3. DATE CHECK: if the page shows a date, note it exactly. If the data is from a previous day \
+     (e.g. non-business hours), explicitly state this in your summary.
+  4. SCREENSHOT: take_screenshot AFTER confirming data. The screenshot is evidence, not a data source.
+  5. REVIEW: call review_and_finalize with your draft summary. The summary must use the EXACT \
+     numbers you extracted in step 1, not approximations from the screenshot.
+  6. Only write your final summary AFTER the review confirms "All verified".
 """
 
 _skill_catalogue = build_skill_catalogue()
