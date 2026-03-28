@@ -107,12 +107,14 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
 - EVIDENCE FLOW (follow this order):
   1. CONFIRM data first: use get_page_content or evaluate_javascript to extract the key results \
      (names, prices, times, etc). Write them down in your reasoning.
-  2. THEN screenshot: take_screenshot of the results page showing the data you extracted.
-  3. REVIEW: call review_and_finalize with your draft summary. The review will compare \
-     your summary against the screenshot pixel-by-pixel. Every number, name, date, and \
-     count in your summary MUST exactly match the screenshot. If the review finds errors, \
-     fix them and call review_and_finalize again with the corrected summary.
-  4. Only write your final summary (no tool call) AFTER the review confirms "All verified".
+  2. RELEVANCE CHECK: verify each result actually matches the search query. \
+     If searching for "AirPods Pro 2", ensure results ARE AirPods Pro 2, not cases or accessories. \
+     Skip irrelevant items and note them as filtered out.
+  3. SCREENSHOT: if results span multiple screens, scroll + take_screenshot multiple times \
+     so evidence covers ALL items in your summary. One screenshot per "screen-full" of data.
+  4. REVIEW: call review_and_finalize with your draft summary. Every number, name, date \
+     MUST exactly match the screenshot. If errors found, fix and review again.
+  5. Only write your final summary AFTER the review confirms "All verified".
 """
 
 _skill_catalogue = build_skill_catalogue()
