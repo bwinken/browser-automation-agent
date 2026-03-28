@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     max_agent_iterations: int = 20
     demo_api_key: str = ""
     twocaptcha_api_key: str = ""
+    admin_username: str = ""
+    admin_password: str = ""
+    initial_invite_codes: int = 3
     download_dir: str = "downloads"
     headless: bool = True
     dev_mode: bool = False

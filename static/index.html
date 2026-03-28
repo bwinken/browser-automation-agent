@@ -112,13 +112,92 @@
       .sidebar, .tool-col { display: none; }
     }
   </style>
+    /* ── Auth page ── */
+    .auth-page {
+      position: fixed; inset: 0; background: var(--bg); z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .auth-page.hidden { display: none; }
+    .auth-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 32px; width: min(400px, 90vw);
+    }
+    .auth-card h2 { color: var(--accent); font-size: 1.1rem; margin-bottom: 6px; }
+    .auth-card p { color: var(--muted); font-size: .78rem; margin-bottom: 20px; }
+    .auth-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .auth-field label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .auth-field input {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: var(--mono); font-size: .88rem;
+      padding: 9px 12px; outline: none;
+    }
+    .auth-field input:focus { border-color: var(--accent); }
+    .auth-btn {
+      width: 100%; background: var(--accent); color: #0d1117; font-family: var(--mono);
+      font-size: .9rem; font-weight: 700; border: none; border-radius: 6px;
+      padding: 10px; cursor: pointer; margin-top: 6px;
+    }
+    .auth-btn:hover { opacity: .85; }
+    .auth-error { color: var(--danger); font-size: .78rem; margin-top: 8px; display: none; }
+    .auth-toggle { color: var(--muted); font-size: .78rem; margin-top: 14px; text-align: center; }
+    .auth-toggle a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .auth-toggle a:hover { text-decoration: underline; }
+    .logout-btn {
+      background: none; border: 1px solid var(--border); border-radius: 5px;
+      color: var(--muted); font-family: var(--mono); font-size: .72rem;
+      padding: 3px 10px; cursor: pointer; margin-left: auto;
+    }
+    .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+  </style>
 </head>
 <body>
+
+<!-- Auth Page -->
+<div class="auth-page" id="authPage">
+  <div class="auth-card">
+    <h2 id="authTitle">&#9881; BaaS — Login</h2>
+    <p>Browser Automation as a Service</p>
+
+    <div id="authLoginForm">
+      <div class="auth-field">
+        <label>Username</label>
+        <input id="loginUser" type="text" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input id="loginPass" type="password" autocomplete="current-password" />
+      </div>
+      <button class="auth-btn" onclick="doLogin()">Login</button>
+      <div class="auth-error" id="loginError"></div>
+      <div class="auth-toggle">No account? <a onclick="showRegister()">Register with invite code</a></div>
+    </div>
+
+    <div id="authRegisterForm" style="display:none">
+      <div class="auth-field">
+        <label>Invite Code</label>
+        <input id="regInvite" type="text" placeholder="BAAS-XXXX-XXXX" />
+      </div>
+      <div class="auth-field">
+        <label>Username</label>
+        <input id="regUser" type="text" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label>Password (min 6 chars)</label>
+        <input id="regPass" type="password" autocomplete="new-password" />
+      </div>
+      <button class="auth-btn" onclick="doRegister()">Register</button>
+      <div class="auth-error" id="regError"></div>
+      <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Login</a></div>
+    </div>
+  </div>
+</div>
+
 <div class="app">
   <header>
     <h1>&#9881; BaaS</h1>
     <span style="color:var(--muted);font-size:.78rem" id="taskIdLabel"></span>
     <span id="badge" class="badge badge-idle">idle</span>
+    <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">Logout</button>
   </header>
 
   <div class="workspace">
@@ -183,10 +262,84 @@
 let ws = null, apiKey = '', currentTaskId = null;
 const toolLines = [];
 
-// ── Init ─────────────────────────────────────────────────────────
-async function init() {
-  try { const r = await fetch('/api/task/demo-key'); const d = await r.json(); if (d.api_key) apiKey = d.api_key; } catch {}
+// ── Auth ─────────────────────────────────────────────────────────
+function showLogin() {
+  document.getElementById('authLoginForm').style.display = 'block';
+  document.getElementById('authRegisterForm').style.display = 'none';
+  document.getElementById('authTitle').textContent = '\u2699 BaaS \u2014 Login';
+}
+function showRegister() {
+  document.getElementById('authLoginForm').style.display = 'none';
+  document.getElementById('authRegisterForm').style.display = 'block';
+  document.getElementById('authTitle').textContent = '\u2699 BaaS \u2014 Register';
+}
+
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  if (!user || !pass) { errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return; }
+  try {
+    const r = await fetch('/api/users/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user, password: pass}),
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.detail || 'Login failed'; errEl.style.display = 'block'; return; }
+    onAuthSuccess(d.api_key, d.username);
+  } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+}
+
+async function doRegister() {
+  const invite = document.getElementById('regInvite').value.trim();
+  const user = document.getElementById('regUser').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const errEl = document.getElementById('regError');
+  errEl.style.display = 'none';
+  if (!invite || !user || !pass) { errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return; }
+  try {
+    const r = await fetch('/api/users/register', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user, password: pass, invite_code: invite}),
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.detail || 'Registration failed'; errEl.style.display = 'block'; return; }
+    onAuthSuccess(d.api_key, d.username);
+  } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+}
+
+function onAuthSuccess(key, username) {
+  apiKey = key;
+  localStorage.setItem('baas_api_key', key);
+  localStorage.setItem('baas_username', username);
+  document.getElementById('authPage').classList.add('hidden');
+  document.getElementById('logoutBtn').style.display = '';
+  document.getElementById('logoutBtn').textContent = username + ' \u2022 Logout';
   loadHistory();
+}
+
+function doLogout() {
+  apiKey = '';
+  localStorage.removeItem('baas_api_key');
+  localStorage.removeItem('baas_username');
+  document.getElementById('authPage').classList.remove('hidden');
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('chatMessages').innerHTML = '';
+  clearToolLog();
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+function init() {
+  // Check localStorage for saved session
+  const savedKey = localStorage.getItem('baas_api_key');
+  const savedUser = localStorage.getItem('baas_username');
+  if (savedKey) {
+    onAuthSuccess(savedKey, savedUser || 'user');
+  }
+  // Allow Enter to submit auth forms
+  document.getElementById('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('regPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
   document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
 }
 

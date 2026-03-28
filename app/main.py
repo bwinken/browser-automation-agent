@@ -22,8 +22,11 @@ from app.auth import hash_password
 from app.config import settings
 
 setup_logging(settings.log_level)
-from app.models import Task, User
+import secrets as _secrets
+from app.models import InviteCode, Task, User
 from app.ws.hitl import hitl_websocket
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -31,7 +34,7 @@ async def lifespan(app: FastAPI):
     client = AsyncIOMotorClient(settings.mongodb_url)
     await init_beanie(
         database=client[settings.db_name],
-        document_models=[User, Task],
+        document_models=[User, Task, InviteCode],
     )
     # Auto-create demo user if DEMO_API_KEY is set in .env
     if settings.demo_api_key:
@@ -42,6 +45,31 @@ async def lifespan(app: FastAPI):
                 hashed_password=hash_password(uuid.uuid4().hex),
                 api_key=settings.demo_api_key,
             ).insert()
+
+    # Auto-create admin user
+    if settings.admin_username:
+        admin = await User.find_one(User.username == settings.admin_username)
+        if not admin:
+            admin = User(
+                username=settings.admin_username,
+                hashed_password=hash_password(settings.admin_password or "admin"),
+                is_admin=True,
+            )
+            await admin.insert()
+            log.info("Admin user created: %s (API key: %s)", admin.username, admin.api_key)
+
+    # Auto-generate initial invite codes
+    code_count = await InviteCode.find(InviteCode.used == False).count()
+    if code_count == 0 and settings.initial_invite_codes > 0:
+        codes = []
+        for _ in range(settings.initial_invite_codes):
+            code = f"BAAS-{_secrets.token_hex(4).upper()}-{_secrets.token_hex(4).upper()}"
+            await InviteCode(code=code).insert()
+            codes.append(code)
+        log.info("Generated %d invite codes:", len(codes))
+        for c in codes:
+            log.info("  %s", c)
+
     yield
     client.close()
 
@@ -52,8 +80,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-log = logging.getLogger(__name__)
 
 
 @app.exception_handler(Exception)

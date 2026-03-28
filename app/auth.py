@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Security
+from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 
@@ -34,4 +34,10 @@ async def get_current_user(
     user = await User.find_one(User.api_key == credentials.credentials)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid API key")
+    return user
+
+
+async def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user

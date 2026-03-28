@@ -10,19 +10,22 @@ class User(Document):
     username: str
     hashed_password: str
     api_key: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    is_admin: bool = False
     token_usage: int = 0
 
     class Settings:
         name = "users"
 
 
-class BrowserState(Document):
-    user_id: PydanticObjectId
-    state_json: Dict[str, Any]
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+class InviteCode(Document):
+    code: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    used: bool = False
+    used_by: Optional[str] = None
+    used_at: Optional[datetime] = None
 
     class Settings:
-        name = "browser_states"
+        name = "invite_codes"
 
 
 class Task(Document):
