@@ -22,7 +22,7 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
         task = resp.json()
 
     status = task["status"]
-    result = task.get("result_data", {})
+    result = task.get("result_data") or {}
     summary = result.get("summary", "")
     screenshots = result.get("screenshots", [])
     prompt = task.get("prompt", "")
