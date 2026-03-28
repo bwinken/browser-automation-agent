@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 import uuid
 from contextlib import asynccontextmanager
@@ -68,6 +69,29 @@ app.include_router(tasks_api.router, prefix="/api")
 
 # WebSocket HITL endpoint
 app.add_api_websocket_route("/ws/task/{task_id}", hitl_websocket)
+
+# Serve downloaded files (auth-protected)
+download_dir = os.path.abspath(settings.download_dir)
+os.makedirs(download_dir, exist_ok=True)
+
+from fastapi import Header, HTTPException
+from fastapi.responses import FileResponse
+
+@app.get("/downloads/{filename}")
+async def get_download(filename: str, authorization: str = Header(None)):
+    if not settings.dev_mode:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="API key required")
+        api_key = authorization.split(" ", 1)[1]
+        user = await User.find_one(User.api_key == api_key)
+        if not user:
+            raise HTTPException(status_code=403, detail="Invalid API key")
+    # Prevent path traversal
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(download_dir, safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=safe_name)
 
 # Serve the SPA last so it doesn't shadow API routes
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
