@@ -111,12 +111,12 @@
 | Skyscanner | Aggressive bot detection ("按住不放" CAPTCHA) — blocks automated browsers | Added to Avoid Blocked Services |
 | 台銀匯率 | Non-business hours shows previous day's date — agent must note this | Weather/bank skill note needed |
 
-### Phase 2 Open Issues
+### Phase 2 Round 1 Issues (all resolved in Round 2)
 
-- [ ] PTT: agent needs to cross-check push counts from DOM, not guess from screenshot
-- [ ] Company Lookup: must take screenshot of result page as evidence
-- [ ] Exchange Rate: agent should note when data shows previous day (non-business hours)
-- [ ] All: review_and_finalize still not catching date/number mismatches consistently
+- [x] PTT: added DOM extraction with evaluate_javascript — 70→80
+- [x] Company Lookup: added evidence screenshot reminder — 70→100
+- [x] Exchange Rate: added non-business hours date warning — 70→100
+- [x] review_and_finalize: enforce DOM extraction before screenshots — all improved
 
 ---
 
