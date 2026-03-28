@@ -330,6 +330,39 @@ Score: 0-100, with pass/fail. Results saved in `test_results.md`.
 
 ---
 
+## Known Limitations
+
+### Blocked Services
+- **Google Search** — always triggers CAPTCHA; agent uses DuckDuckGo instead
+- **Google Login** (Gmail, Docs, Slides, NotebookLM) — Chromium detected as insecure browser; cannot automate login
+- **AI SaaS tools** (Gamma, Beautiful.ai, Canva, Figma) — all require account creation which cannot be automated
+- **Skyscanner** — aggressive bot detection ("press and hold" CAPTCHA); blocks automated browsers entirely
+
+### Browser & Automation
+- **Single browser per task** — each task launches a new Chromium instance; no session reuse across tasks
+- **No file upload** — agent can download files but cannot upload files to websites
+- **No multi-tab** — agent operates in a single browser tab
+- **JavaScript-heavy SPAs** — sites with hashed CSS classes (591, some React apps) require link-pattern extraction instead of CSS selectors
+- **Real-time content** — pages that update continuously (PTT, live feeds) may show different data between DOM extraction and screenshot
+
+### Data & Storage
+- **Screenshots stored in MongoDB** — evidence screenshots are base64-encoded in `result_data`, which increases document size (~500KB per screenshot). MongoDB 16MB document limit allows ~30 screenshots per task
+- **Task continuation loses tool context** — follow-up messages (`/continue`) restore user + assistant text messages only; tool results, screenshots, and intermediate state are not preserved. The LLM relies on its own summary for context
+- **Downloaded files on server** — files are stored in the server's `downloads/` directory. On Zeabur (containerized), files are lost on restart. For persistent storage, integrate with S3/R2
+
+### Authentication & Security
+- **Invite code system** — registration requires an invite code; no self-service signup
+- **API keys never expire** — compromised keys require manual database update
+- **No rate limiting** — API endpoints have no throttling
+- **DEV_MODE bypasses all auth** — must be explicitly set to `false` in production
+
+### Model & Cost
+- **Token usage scales with iterations** — complex tasks (20+ iterations) can consume significant tokens, especially with vision (screenshots)
+- **Vision detail level** — screenshots sent to LLM use `detail: auto`; high-resolution pages increase token cost
+- **No streaming** — agent runs to completion; no partial results during execution
+
+---
+
 ## Deployment (Zeabur)
 
 1. Push to GitHub
