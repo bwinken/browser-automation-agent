@@ -157,11 +157,19 @@ TOOLS = [
             "description": (
                 "Take a screenshot of the current browser viewport and return it as "
                 "a base64-encoded PNG. Use this to visually verify page state, check "
-                "what the page looks like, or debug layout issues."
+                "what the page looks like, or debug layout issues. "
+                "Set evidence=true to save this screenshot as verifiable evidence "
+                "for the final report (use for data pages you extracted info from)."
             ),
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "evidence": {
+                        "type": "boolean",
+                        "description": "If true, save this screenshot as evidence for the final report. Use when capturing data pages.",
+                        "default": False,
+                    }
+                },
                 "required": [],
             },
         },
@@ -852,12 +860,15 @@ class PlaywrightToolExecutor:
         return await self._page.evaluate(_GET_PAGE_CONTENT_JS)
 
 
-    async def take_screenshot(self) -> str:
+    async def take_screenshot(self, evidence: bool = False) -> str:
         raw = await self._page.screenshot(type="png")
         b64 = base64.b64encode(raw).decode()
         # Store for agent to inject as vision message
         self._last_screenshot_b64 = b64
-        return f"Screenshot captured ({len(raw)} bytes). Image is now visible to you — describe what you see."
+        # Flag for agent loop to collect as evidence
+        self._is_evidence_screenshot = evidence
+        tag = " [EVIDENCE SAVED]" if evidence else ""
+        return f"Screenshot captured ({len(raw)} bytes).{tag} Image is now visible to you — describe what you see."
 
     async def wait_for_element(self, selector: str, timeout: int = 10_000) -> str:
         await self._page.wait_for_selector(selector, timeout=timeout)

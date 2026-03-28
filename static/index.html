@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BaaS — Browser Automation as a Service</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -12,41 +13,63 @@
       --text: #c9d1d9; --muted: #8b949e;
       --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: 1.6; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 15px; line-height: 1.6; }
 
     /* ── Layout ── */
     .app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
     header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; }
-    header h1 { font-size: 1rem; color: var(--accent); letter-spacing: .03em; white-space: nowrap; }
+    header h1 { font-size: 1.1rem; color: var(--accent); letter-spacing: .03em; white-space: nowrap; }
     header .badge { margin-left: auto; }
-    footer { padding: 8px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: .72rem; text-align: center; }
+    footer { padding: 8px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: .78rem; text-align: center; }
 
     .workspace { display: grid; grid-template-columns: 220px 1fr 340px; gap: 0; overflow: hidden; min-height: 0; }
 
     /* ── Sidebar: History ── */
     .sidebar { border-right: 1px solid var(--border); padding: 12px; overflow-y: auto; }
-    .sidebar-title { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+    .sidebar-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
     .hist-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; cursor: pointer; margin-bottom: 4px; transition: border-color .15s; }
     .hist-item:hover { border-color: var(--accent); }
     .hist-item.active { border-color: var(--accent); background: #0d1520; }
-    .hist-prompt { font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hist-meta { display: flex; justify-content: space-between; margin-top: 2px; font-size: .62rem; color: var(--muted); }
+    .hist-prompt { font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .hist-meta { display: flex; justify-content: space-between; margin-top: 2px; font-size: .7rem; color: var(--muted); }
+    .hist-del { background: none; border: none; color: var(--muted); font-size: .8rem; cursor: pointer; padding: 0 2px; line-height: 1; opacity: 0; transition: opacity .15s, color .15s; }
+    .hist-item:hover .hist-del { opacity: 1; }
+    .hist-del:hover { color: var(--danger); }
+    .hist-pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-size: .68rem; color: var(--muted); }
+    .hist-pager button { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: .75rem; padding: 1px 8px; cursor: pointer; }
+    .hist-pager button:disabled { opacity: .3; cursor: not-allowed; }
+    .hist-pager button:not(:disabled):hover { border-color: var(--accent); }
 
     /* ── Center: Chat ── */
     .chat-col { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
     .chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
     .chat-input-bar { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
-    .chat-input-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .88rem; padding: 8px 12px; outline: none; }
+    .chat-input-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: .95rem; padding: 10px 14px; outline: none; }
     .chat-input-bar input:focus { border-color: var(--accent); }
-    .chat-input-bar button { border: none; border-radius: 6px; font-family: var(--mono); font-size: .85rem; padding: 8px 16px; cursor: pointer; background: var(--accent); color: #0d1117; font-weight: 700; }
+    .chat-input-bar button { border: none; border-radius: 6px; font-family: var(--mono); font-size: .9rem; padding: 10px 18px; cursor: pointer; background: var(--accent); color: #0d1117; font-weight: 700; }
     .chat-input-bar button:disabled { opacity: .4; cursor: not-allowed; }
 
     /* Chat bubbles */
-    .msg { max-width: 85%; padding: 10px 14px; border-radius: 10px; font-size: .85rem; line-height: 1.6; word-break: break-word; }
+    .msg { max-width: 85%; padding: 12px 16px; border-radius: 10px; font-size: .92rem; line-height: 1.7; word-break: break-word; }
     .msg-user { align-self: flex-end; background: #1f3a5f; color: var(--accent); border-bottom-right-radius: 2px; }
     .msg-agent { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
-    .msg-system { align-self: center; background: none; color: var(--muted); font-size: .75rem; font-style: italic; }
+    .msg-system { align-self: center; background: none; color: var(--muted); font-size: .82rem; font-style: italic; }
     .msg pre { white-space: pre-wrap; margin: 0; }
+    /* Markdown inside agent messages */
+    .msg-agent .md-body { line-height: 1.7; }
+    .msg-agent .md-body p { margin: 0 0 8px; }
+    .msg-agent .md-body p:last-child { margin-bottom: 0; }
+    .msg-agent .md-body ul, .msg-agent .md-body ol { margin: 4px 0 8px 18px; padding: 0; }
+    .msg-agent .md-body li { margin-bottom: 2px; }
+    .msg-agent .md-body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: .8rem; }
+    .msg-agent .md-body th, .msg-agent .md-body td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+    .msg-agent .md-body th { background: rgba(255,255,255,.04); font-weight: 600; }
+    .msg-agent .md-body code { background: rgba(255,255,255,.06); padding: 1px 4px; border-radius: 3px; font-size: .82em; }
+    .msg-agent .md-body pre code { display: block; padding: 8px; border-radius: 4px; overflow-x: auto; }
+    .msg-agent .md-body h1, .msg-agent .md-body h2, .msg-agent .md-body h3 { margin: 10px 0 4px; font-size: .9rem; color: var(--accent); }
+    .msg-agent .md-body strong { color: #e6edf3; }
+    .msg-agent .md-body a { color: var(--accent); }
+    .msg-agent .md-body hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
     /* Inline interaction (ask_user) */
     .msg-ask { align-self: flex-start; background: var(--surface); border: 1px solid var(--warn); border-bottom-left-radius: 2px; }
@@ -63,21 +86,46 @@
     .btn-send { background: var(--accent2); color: #0d1117; font-weight: 600; }
     .btn-skip { background: var(--border); color: var(--text); }
 
-    /* ── Right: Tool Panel ── */
+    /* ── Right: Tool Panel (structured) ── */
     .tool-col { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-    .tool-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
-    .tool-log { flex: 1; overflow-y: auto; padding: 10px 12px; font-size: .78rem; line-height: 1.7; background: #010409; }
-    .tl { color: var(--text); }
+    .tool-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .tool-log { flex: 1; overflow-y: auto; padding: 8px; font-size: .75rem; line-height: 1.5; background: #010409; display: flex; flex-direction: column; gap: 2px; }
+
+    /* Iteration group */
+    .iter-group { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); flex-shrink: 0; }
+    .iter-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; user-select: none; font-size: .78rem; color: var(--muted); background: rgba(255,255,255,.02); }
+    .iter-head:hover { background: rgba(255,255,255,.04); }
+    .iter-head .iter-num { color: var(--accent); font-weight: 700; min-width: 28px; }
+    .iter-head .iter-summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+    .iter-head .iter-toggle { color: #444c56; font-size: .65rem; transition: transform .15s; }
+    .tool-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: .68rem; font-weight: 600; background: #1f3a5f; color: #79c0ff; white-space: nowrap; }
+    .tool-tag.t-navigate { background: #1a3a25; color: #56d364; }
+    .tool-tag.t-click, .tool-tag.t-fill, .tool-tag.t-press_key, .tool-tag.t-select_option { background: #1f3a5f; color: #79c0ff; }
+    .tool-tag.t-take_screenshot { background: #2d1a3a; color: #d2a8ff; }
+    .tool-tag.t-evaluate_javascript, .tool-tag.t-get_page_content { background: #3d2b00; color: var(--warn); }
+    .tool-tag.t-review_and_finalize { background: #1a3a25; color: #3fb950; }
+    .tool-tag.t-load_skill { background: #3a1a2a; color: #f778ba; }
+    .iter-head .iter-toggle.open { transform: rotate(90deg); }
+    .iter-body { display: none; padding: 4px 10px 6px; border-top: 1px solid var(--border); }
+    .iter-body.open { display: block; }
+
+    /* Log lines inside iteration */
+    .tl { color: var(--text); padding: 2px 0; font-size: .8rem; line-height: 1.5; }
     .tl.tool { color: #79c0ff; }
-    .tl.result { color: #56d364; }
+    .tl.result { color: #56d364; font-size: .76rem; max-height: 60px; overflow: hidden; cursor: pointer; position: relative; }
+    .tl.result.expanded { max-height: none; }
+    .tl.result:not(.expanded)::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 18px; background: linear-gradient(transparent, var(--surface)); pointer-events: none; }
     .tl.err { color: var(--danger); }
-    .tl.meta { color: var(--muted); font-style: italic; }
+    .tl.meta { color: var(--muted); font-style: italic; padding: 4px 0; }
     .tl.skill { color: var(--warn); font-weight: 600; }
-    .tl.agent { color: #d2a8ff; font-style: italic; }
+    .tl.agent { color: #d2a8ff; font-style: italic; border-left: 2px solid #d2a8ff33; padding-left: 8px; margin: 2px 0; }
     .tl .pfx { color: #444c56; user-select: none; margin-right: 4px; }
 
+    /* Flat lines (meta, outside iterations) */
+    .tl-flat { padding: 4px 10px; }
+
     /* ── Badge ── */
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .7rem; font-weight: 600; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .76rem; font-weight: 600; }
     .badge-idle { background: #21262d; color: var(--muted); }
     .badge-pending { background: #21262d; color: var(--muted); }
     .badge-running { background: #1f3a5f; color: var(--accent); }
@@ -121,20 +169,20 @@
       background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
       padding: 32px; width: min(400px, 90vw);
     }
-    .auth-card h2 { color: var(--accent); font-size: 1.1rem; margin-bottom: 6px; }
-    .auth-card p { color: var(--muted); font-size: .78rem; margin-bottom: 20px; }
+    .auth-card h2 { color: var(--accent); font-size: 1.2rem; margin-bottom: 6px; }
+    .auth-card p { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
     .auth-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-    .auth-field label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .auth-field label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
     .auth-field input {
       background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-      color: var(--text); font-family: var(--mono); font-size: .88rem;
-      padding: 9px 12px; outline: none;
+      color: var(--text); font-family: var(--mono); font-size: .95rem;
+      padding: 10px 14px; outline: none;
     }
     .auth-field input:focus { border-color: var(--accent); }
     .auth-btn {
       width: 100%; background: var(--accent); color: #0d1117; font-family: var(--mono);
-      font-size: .9rem; font-weight: 700; border: none; border-radius: 6px;
-      padding: 10px; cursor: pointer; margin-top: 6px;
+      font-size: .95rem; font-weight: 700; border: none; border-radius: 6px;
+      padding: 11px; cursor: pointer; margin-top: 6px;
     }
     .auth-btn:hover { opacity: .85; }
     .auth-error { color: var(--danger); font-size: .78rem; margin-top: 8px; display: none; }
@@ -202,7 +250,10 @@
   <div class="workspace">
     <!-- Left: History -->
     <div class="sidebar">
-      <div class="sidebar-title">History</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="sidebar-title" style="margin-bottom:0">History</div>
+        <button onclick="newTask()" style="background:var(--accent);color:#0d1117;border:none;border-radius:5px;font-family:var(--mono);font-size:.68rem;font-weight:700;padding:3px 10px;cursor:pointer">+ New</button>
+      </div>
       <div id="historyList"><span style="font-size:.75rem;color:var(--muted)">No tasks yet.</span></div>
     </div>
 
@@ -214,6 +265,7 @@
       <div class="chat-input-bar">
         <input id="chatInput" type="text" placeholder="Describe a task or reply to the agent..." />
         <button id="sendBtn" onclick="handleSend()">Send</button>
+        <button id="stopBtn" onclick="handleStop()" style="display:none; background:var(--danger);">Stop</button>
       </div>
     </div>
 
@@ -226,7 +278,7 @@
     </div>
   </div>
 
-  <footer>Kane.Beh 4422 &mdash; Browser Automation as a Service</footer>
+  <footer>Kane.Beh &mdash; Browser Automation as a Service &mdash; behwinken@gmail.com</footer>
 </div>
 
 <!-- HITL Modal -->
@@ -430,7 +482,28 @@ async function handleSend() {
   } catch (e) { addChat('system', 'Network error: ' + e.message); setBadge('failed'); enableSend(); }
 }
 
-function enableSend() { document.getElementById('sendBtn').disabled = false; }
+function enableSend() {
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('stopBtn').style.display = 'none';
+}
+function showStopBtn() {
+  document.getElementById('stopBtn').style.display = '';
+}
+async function handleStop() {
+  if (!currentTaskId) return;
+  // Send cancel via both WebSocket and REST for reliability
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'cancel' }));
+  }
+  try {
+    await fetch('/api/task/' + currentTaskId + '/cancel', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+    });
+  } catch {}
+  addToolLine('Cancel signal sent...', 'meta');
+  document.getElementById('stopBtn').disabled = true;
+}
 
 // ── WebSocket ────────────────────────────────────────────────────
 let _wsReconnectTimer = null, _wsReconnectAttempts = 0;
@@ -450,12 +523,7 @@ function _connectWsInner(taskId) {
     if (msg.status) setBadge(msg.status);
 
     if (msg.type === 'log' && msg.message) {
-      const cls = msg.message.includes('[SKILL:') ? 'skill'
-                : msg.message.startsWith('Agent:') ? 'agent'
-                : msg.message.startsWith('Tool \u25b6') ? 'tool'
-                : msg.message.startsWith('Tool \u25c0') ? 'result'
-                : /\[ERROR:|fatal|error/i.test(msg.message) ? 'err' : '';
-      addToolLine(msg.message, cls);
+      addToolLine(msg.message, classifyLine(msg.message));
     }
 
     if (msg.type === 'status' && msg.logs) syncToolLog(msg.logs);
@@ -510,9 +578,18 @@ function addChatHTML(html) {
   return div;
 }
 
+// ── Markdown rendering ───────────────────────────────────────────
+function renderMd(text) {
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+    return marked.parse(text || '');
+  }
+  return `<pre style="white-space:pre-wrap">${esc(text || '')}</pre>`;
+}
+
 // ── Structured result rendering ──────────────────────────────────
 function showStructuredResult(r) {
-  let html = `<div class="msg msg-agent"><div style="white-space:pre-wrap">${esc(r.summary || '')}</div>`;
+  let html = `<div class="msg msg-agent"><div class="md-body">${renderMd(r.summary || '')}</div>`;
   const shots = r.screenshots || (r.screenshot ? [r.screenshot] : []);
   if (shots.length) {
     html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">';
@@ -593,53 +670,154 @@ function skipAsk() {
   addChat('system', 'Skipped — agent will use its best judgement.');
 }
 
-// ── Tool log panel ───────────────────────────────────────────────
+// ── Tool log panel (structured by iteration) ────────────────
+function classifyLine(t) {
+  if (t.includes('[SKILL:')) return 'skill';
+  if (t.startsWith('Agent:')) return 'agent';
+  if (t.startsWith('Tool \u25b6')) return 'tool';
+  if (t.startsWith('Tool \u25c0')) return 'result';
+  if (/\[ERROR:|fatal|error/i.test(t)) return 'err';
+  if (/^\[iter \d+\]/.test(t)) return 'iter';
+  return '';
+}
+
 function addToolLine(text, cls = '') {
   if (toolLines.length > 500) toolLines.shift();
-  toolLines.push({ text, cls });
+  toolLines.push({ text, cls: cls || classifyLine(text) });
   renderToolLog();
 }
 function syncToolLog(logs) {
   toolLines.length = 0;
-  logs.forEach(t => {
-    const cls = t.includes('[SKILL:') ? 'skill' : t.startsWith('Agent:') ? 'agent'
-              : t.startsWith('Tool \u25b6') ? 'tool' : t.startsWith('Tool \u25c0') ? 'result'
-              : /\[ERROR:|fatal|error/i.test(t) ? 'err' : '';
-    toolLines.push({ text: t, cls });
-  });
+  logs.forEach(t => toolLines.push({ text: t, cls: classifyLine(t) }));
   renderToolLog();
 }
+
 function renderToolLog() {
   const el = document.getElementById('toolLog');
-  el.innerHTML = toolLines.map(({ text, cls }) =>
-    `<div class="tl ${cls}"><span class="pfx">&rsaquo;</span>${esc(text)}</div>`
-  ).join('');
+  const groups = [];
+  let current = null;
+  const prelude = [];
+
+  toolLines.forEach(({ text, cls }) => {
+    if (cls === 'iter') {
+      const m = text.match(/^\[iter (\d+)\]/);
+      if (current) groups.push(current);
+      current = { iter: m ? m[1] : '?', tools: [], lines: [] };
+    } else if (current) {
+      current.lines.push({ text, cls });
+      if (cls === 'tool') {
+        const tm = text.match(/^Tool \u25b6\s*(\w+)/);
+        if (tm) current.tools.push(tm[1]);
+      }
+    } else {
+      prelude.push({ text, cls });
+    }
+  });
+  if (current) groups.push(current);
+
+  let html = '';
+  prelude.forEach(({ text, cls }) => {
+    html += `<div class="tl tl-flat ${cls}"><span class="pfx">\u203a</span>${esc(text)}</div>`;
+  });
+
+  groups.forEach((g, gi) => {
+    const isLast = gi === groups.length - 1;
+    const openCls = isLast ? ' open' : '';
+    const tags = g.tools.length
+      ? g.tools.map(t => `<span class="tool-tag t-${t}">${t}</span>`).join('')
+      : '<span style="color:var(--muted)">Processing...</span>';
+    html += `<div class="iter-group">`;
+    html += `<div class="iter-head" onclick="toggleIter(this)">`;
+    html += `<span class="iter-num">#${g.iter}</span>`;
+    html += `<span class="iter-summary">${tags}</span>`;
+    html += `<span class="iter-toggle${openCls}">\u25b6</span>`;
+    html += `</div>`;
+    html += `<div class="iter-body${openCls}">`;
+    g.lines.forEach(({ text, cls }) => {
+      const extra = cls === 'result' ? ' onclick="this.classList.toggle(\'expanded\')"' : '';
+      html += `<div class="tl ${cls}"${extra}>${esc(text)}</div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  el.innerHTML = html || '<div class="tl tl-flat meta"><span class="pfx">\u203a</span>Waiting for task\u2026</div>';
   el.scrollTop = el.scrollHeight;
 }
-function clearToolLog() { toolLines.length = 0; document.getElementById('toolLog').innerHTML = '<div class="tl meta"><span class="pfx">&rsaquo;</span>Waiting for task&hellip;</div>'; }
 
-// ── History ──────────────────────────────────────────────────────
-async function loadHistory() {
+function toggleIter(head) {
+  head.querySelector('.iter-toggle').classList.toggle('open');
+  head.nextElementSibling.classList.toggle('open');
+}
+
+function clearToolLog() {
+  toolLines.length = 0;
+  document.getElementById('toolLog').innerHTML = '<div class="tl tl-flat meta"><span class="pfx">\u203a</span>Waiting for task\u2026</div>';
+}
+
+// ── History (paginated) ──────────────────────────────────────────
+let _histPage = 0;
+const _histLimit = 10;
+
+async function loadHistory(page) {
   if (!apiKey) return;
+  if (page !== undefined) _histPage = page;
+  const skip = _histPage * _histLimit;
   try {
-    const r = await fetch('/api/task?limit=10', { headers: { 'Authorization': 'Bearer ' + apiKey } });
+    const r = await fetch(`/api/task?skip=${skip}&limit=${_histLimit}`, { headers: { 'Authorization': 'Bearer ' + apiKey } });
     if (!r.ok) return;
-    renderHistory(await r.json());
+    const data = await r.json();
+    renderHistory(data.tasks || [], data.total || 0);
   } catch {}
 }
-function renderHistory(tasks) {
+
+function renderHistory(tasks, total) {
   const el = document.getElementById('historyList');
-  if (!tasks.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">No tasks yet.</span>'; return; }
-  el.innerHTML = tasks.map(t => {
+  if (!tasks.length && _histPage === 0) {
+    el.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">No tasks yet.</span>';
+    return;
+  }
+  let html = tasks.map(t => {
     const d = new Date(t.created_at);
     const time = d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     const active = t.task_id === currentTaskId ? ' active' : '';
-    return `<div class="hist-item${active}" onclick="viewTask('${t.task_id}')">
-      <div class="hist-prompt" title="${esc(t.prompt)}">${esc(t.prompt)}</div>
-      <div class="hist-meta"><span>${time}</span><span class="badge badge-${t.status}">${t.status}</span></div>
+    return `<div class="hist-item${active}">
+      <div class="hist-prompt" title="${esc(t.prompt)}" onclick="viewTask('${t.task_id}')">${esc(t.prompt)}</div>
+      <div class="hist-meta">
+        <span>${time}</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <span class="badge badge-${t.status}">${t.status}</span>
+          <button class="hist-del" onclick="event.stopPropagation();deleteTask('${t.task_id}')" title="Delete">\u00d7</button>
+        </span>
+      </div>
     </div>`;
   }).join('');
+
+  // Pagination controls
+  const totalPages = Math.ceil(total / _histLimit);
+  if (totalPages > 1) {
+    html += '<div class="hist-pager">';
+    html += `<button ${_histPage === 0 ? 'disabled' : ''} onclick="loadHistory(${_histPage - 1})">\u2039</button>`;
+    html += `<span>${_histPage + 1} / ${totalPages}</span>`;
+    html += `<button ${_histPage >= totalPages - 1 ? 'disabled' : ''} onclick="loadHistory(${_histPage + 1})">\u203a</button>`;
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
 }
+
+async function deleteTask(taskId) {
+  if (!confirm('Delete this task?')) return;
+  try {
+    const r = await fetch('/api/task/' + taskId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+    });
+    if (!r.ok) { const d = await r.json(); alert(d.detail || 'Delete failed'); return; }
+    if (taskId === currentTaskId) newTask();
+    loadHistory();
+  } catch {}
+}
+
 async function viewTask(taskId) {
   if (!apiKey) return;
   try {
@@ -649,22 +827,28 @@ async function viewTask(taskId) {
     currentTaskId = t.task_id;
     document.getElementById('taskIdLabel').textContent = 'Task: ' + t.task_id.slice(0, 8) + '...';
     setBadge(t.status);
-    // Rebuild chat
     document.getElementById('chatMessages').innerHTML = '';
     addChat('user', t.prompt || '');
     if (t.result_data) showStructuredResult(t.result_data);
-    // Rebuild tool log
     syncToolLog(t.logs || []);
     closeWs();
     if (['running','pending','paused'].includes(t.status)) connectWs(t.task_id);
     else enableSend();
-    document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.hist-item').forEach(el => { if (el.onclick?.toString().includes(taskId)) el.classList.add('active'); });
+    loadHistory();
   } catch {}
 }
 
 // ── Badge ────────────────────────────────────────────────────────
-function setBadge(s) { const b = document.getElementById('badge'); b.textContent = s; b.className = 'badge badge-' + s; }
+function setBadge(s) {
+  const b = document.getElementById('badge'); b.textContent = s; b.className = 'badge badge-' + s;
+  const stopBtn = document.getElementById('stopBtn');
+  if (['running', 'pending', 'paused'].includes(s)) {
+    stopBtn.style.display = '';
+    stopBtn.disabled = false;
+  } else {
+    stopBtn.style.display = 'none';
+  }
+}
 
 // ── HITL Modal ───────────────────────────────────────────────────
 function showModal(reason, screenshot) {
@@ -707,6 +891,18 @@ function sendCredentials() {
   closeCredModal();
 }
 document.getElementById('credOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeCredModal(); });
+
+function newTask() {
+  closeWs();
+  currentTaskId = null;
+  document.getElementById('chatMessages').innerHTML = '<div class="msg msg-system">Describe a task to get started.</div>';
+  clearToolLog();
+  setBadge('idle');
+  enableSend();
+  document.getElementById('taskIdLabel').textContent = '';
+  document.getElementById('chatInput').focus();
+  document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));
+}
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 

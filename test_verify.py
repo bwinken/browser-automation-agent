@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 
 async def verify_task(
     task_id: str, api_key: str, openai_key: str,
-    base_url: str = "http://localhost:8080", log_dir: str = "test_logs",
+    base_url: str = "http://localhost:8000", log_dir: str = "test_logs",
 ):
     """Fetch task result, verify against screenshots, save full log."""
 

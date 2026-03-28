@@ -2,6 +2,37 @@
 
 ---
 
+## [0.5.0] — 2026-03-28
+
+### Task cancel, timeouts, and Phase 3 testing complete
+
+**Task Cancel / Terminate**
+- Stop button in frontend to cancel running tasks
+- `POST /api/task/{id}/cancel` REST endpoint
+- WebSocket cancel signal support
+- Agent generates partial summary before stopping
+
+**Timeouts**
+- Per-tool timeout (60s) — individual tool executions timeout to prevent hangs on unresponsive pages
+- Task timeout (300s) — overall task timeout with partial summary generation on expiry
+
+**Enhanced Loop Detection**
+- Same-tool-name tracking: 10 consecutive uses of the same tool within a 20-action window triggers force break
+- Complements existing exact-match repeated-action detection
+
+**Evidence Screenshot Flag**
+- `take_screenshot(evidence=true)` saves screenshot as verifiable evidence for the final report
+- Enables multi-site tasks to capture separate evidence screenshots per source page
+
+**Phase 3 Testing — Downloads & Multi-step Operations (5/5 passed)**
+- TWSE CSV download — click download button, file saved
+- arXiv PDF download — search + PDF link + `download_file(url=)`
+- THSR + TRA cross-site comparison — times/price from both sites extracted
+- 104 job detail extraction — all fields + evidence screenshot
+- TWSE investors + download — API data + summary verified
+
+---
+
 ## [0.4.0] — 2026-03-28
 
 ### Invite code auth system + login page
@@ -188,37 +219,7 @@
 
 ## Roadmap
 
-### [0.2.0] — Authentication & Reliability
-
-- **Credential store** — detect when agent fills login forms; encrypt and
-  persist credentials in MongoDB; auto-inject on subsequent tasks for the
-  same domain (eliminates repeated manual logins)
-- **Auth scenario skills** — pre-defined handling profiles for common auth
-  flows (Google OAuth, email+OTP, cookie-based SSO) so the agent knows the
-  correct sequence without trial-and-error
-- **Retry + recovery** — on tool failure, agent retries with alternative
-  selectors before escalating to HITL; structured error classification
-  (element-not-found vs network vs auth-wall)
-- **Reduce CAPTCHA exposure** — rotate User-Agent, randomise viewport sizes,
-  add human-like mouse movement delays via `slow_mo`
-
----
-
-### [0.3.0] — Structured HITL & Fully Automated Mode
-
-- **Option-based HITL** — instead of free-text, agent can present the
-  operator with structured choices (radio buttons / checkboxes in modal)
-  for unambiguous decisions
-- **Credential HITL** — when agent detects a login field it hasn't seen
-  before, prompt user for credentials once → store encrypted in DB → reuse
-  automatically on all future tasks for that domain
-- **Fully automated mode** — `AUTO_MODE=true` flag; agent never pauses
-  except for first-time credential collection; all subsequent runs use
-  stored credentials silently
-
----
-
-### [0.4.0] — Frontend Execution Flow Visualisation
+### Next — Frontend Execution Flow Visualisation
 
 - **Structured step view** — replace flat terminal log with a timeline of
   agent steps: each tool call shown as a card (tool name, args, result,
@@ -231,19 +232,7 @@
 
 ---
 
-### [0.5.0] — Task Continuation & Long-running Sessions
-
-- **Continue task** — `POST /api/task/{id}/continue` resumes a `failed` or
-  `paused` task from the last known browser state; preserves full message
-  history so the LLM has full context
-- **Checkpoint saves** — `BrowserState` written to MongoDB after every
-  `navigate` call (not just at task end), enabling fine-grained recovery
-- **Session browser** — UI shows all active browser sessions; operator can
-  attach to a running session and watch live
-
----
-
-### [0.6.0] — Parallel Task Execution (Optional)
+### Future — Parallel Task Execution
 
 - **Parallelism analyser** — before execution, LLM analyses the task and
   splits it into independent sub-tasks (e.g. scrape N URLs concurrently)

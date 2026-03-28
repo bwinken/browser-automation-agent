@@ -16,3 +16,6 @@ hitl_data: Dict[str, dict] = {}
 
 # Per-task asyncio.Queue used to push messages to the WebSocket handler
 ws_queues: Dict[str, asyncio.Queue] = {}
+
+# Set by cancel endpoint — agent loop checks this between iterations
+cancel_events: Dict[str, asyncio.Event] = {}

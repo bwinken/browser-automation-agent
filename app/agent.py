@@ -54,7 +54,7 @@ from playwright.async_api import async_playwright
 
 from app.config import settings
 from app.models import Task, User
-from app.shared import hitl_data, hitl_events, hitl_responses, ws_queues
+from app.shared import cancel_events, hitl_data, hitl_events, hitl_responses, ws_queues
 from app.skills import build_skill_catalogue
 from app.tools import TOOLS, PlaywrightToolExecutor
 
@@ -112,8 +112,9 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
      BEFORE proceeding. Do NOT skip fields or write "not shown".
   3. DATE CHECK: if the page shows a date, note it exactly. If the data is from a previous day \
      (e.g. non-business hours), explicitly state this in your summary.
-  4. SCREENSHOT: take_screenshot of EVERY page you extracted data from. Each source page needs \
-     its own evidence screenshot. If you visited 2 sites, take 2 screenshots.
+  4. SCREENSHOT: take_screenshot(evidence=true) of EVERY page you extracted data from. Each source \
+     page needs its own evidence screenshot. If you visited 2 sites, take 2 evidence screenshots. \
+     Only use evidence=true for data pages — NOT for navigation verification screenshots.
   5. REVIEW: call review_and_finalize with your draft summary. The summary must use the EXACT \
      numbers you extracted in step 1, not approximations from the screenshot.
   6. Only write your final summary AFTER the review confirms "All verified".
@@ -244,8 +245,17 @@ class AgentRunner:
                 await self._set_status("running")
                 await self._log("Agent started.")
 
+            # Register cancel event for this task
+            cancel_evt = asyncio.Event()
+            cancel_events[self.task.task_id] = cancel_evt
+
             # ---- Main loop (Chat Completions API) -------------------------
             for iteration in range(1, settings.max_agent_iterations + 1):
+                # Check cancellation before each iteration
+                if cancel_evt.is_set():
+                    await self._handle_cancellation()
+                    break
+
                 await self._log(f"[iter {iteration}] Calling LLM...")
 
                 response = await asyncio.wait_for(
@@ -323,20 +333,29 @@ class AgentRunner:
                         repeat_count = sum(
                             1 for a in self._recent_actions if a == action_key
                         )
+                        # Also track same-tool-name usage (catches varied-arg loops)
+                        tool_name_count = sum(
+                            1 for a in self._recent_actions if a.startswith(f"{name}(")
+                        )
 
-                        if repeat_count >= self._LOOP_HARD_LIMIT:
-                            await self._log(
-                                f"LOOP DETECTED: '{name}' repeated {repeat_count} times."
+                        if repeat_count >= self._LOOP_HARD_LIMIT or tool_name_count >= 10:
+                            reason = (
+                                f"exact same args {repeat_count}x" if repeat_count >= self._LOOP_HARD_LIMIT
+                                else f"'{name}' called {tool_name_count}x in last 20 actions"
                             )
+                            await self._log(f"LOOP DETECTED: {reason}")
                             tool_result = (
-                                f"[ERROR:loop_detected] You have repeated '{name}' with "
-                                f"the same arguments {repeat_count} times. STOP. "
+                                f"[ERROR:loop_detected] {reason}. STOP. "
                                 f"Try a completely different strategy or request_human_assistance."
                             )
                         else:
                             if repeat_count >= self._LOOP_THRESHOLD:
                                 await self._log(
                                     f"Loop warning: '{name}' repeated {repeat_count} times"
+                                )
+                            if tool_name_count >= 8:
+                                await self._log(
+                                    f"Loop warning: '{name}' used {tool_name_count}x in window"
                                 )
 
                             # ── Execute tool ────────────────────────────
@@ -345,14 +364,21 @@ class AgentRunner:
 
                             await self._log(f"Tool ▶ {name}({json.dumps(args)[:120]})")
 
-                            tool_result = await self._dispatch_tool(
-                                executor, tc.id, name, args
-                            )
+                            try:
+                                tool_result = await asyncio.wait_for(
+                                    self._dispatch_tool(executor, tc.id, name, args),
+                                    timeout=60,  # per-tool timeout: 60s max
+                                )
+                            except asyncio.TimeoutError:
+                                tool_result = (
+                                    f"[ERROR:tool_timeout] {name} timed out after 60s. "
+                                    f"The page may be unresponsive. Try a different approach."
+                                )
 
-                            if repeat_count >= self._LOOP_THRESHOLD:
+                            if repeat_count >= self._LOOP_THRESHOLD or tool_name_count >= 8:
                                 tool_result += (
-                                    f"\n\n⚠ WARNING: You have attempted this same action "
-                                    f"{repeat_count} times. Try a different approach."
+                                    f"\n\n⚠ WARNING: '{name}' repeated {repeat_count}x exact / "
+                                    f"{tool_name_count}x total in window. Try a different approach."
                                 )
 
                             # Defer screenshot injection until after ALL tool results
@@ -369,6 +395,10 @@ class AgentRunner:
                                             }},
                                         ],
                                     })
+                                    # Save as evidence if flagged
+                                    if getattr(executor, "_is_evidence_screenshot", False):
+                                        self._add_evidence(b64)
+                                        executor._is_evidence_screenshot = False
                                     executor._last_screenshot_b64 = None
 
                             # review_and_finalize stores its screenshot directly
@@ -390,6 +420,11 @@ class AgentRunner:
                             "tool_call_id": tc.id,
                             "content": tool_result or "No result.",
                         })
+
+                # Check cancellation after tool execution
+                if cancel_evt.is_set():
+                    await self._handle_cancellation()
+                    break
 
                 # NOW safe to inject deferred messages (after all tool results)
                 self._messages.extend(deferred_messages)
@@ -449,6 +484,7 @@ class AgentRunner:
             except Exception:
                 log.warning("Could not save conversation history for task %s", self.task.task_id)
 
+            cancel_events.pop(self.task.task_id, None)
             await browser.close()
             self._page = None
 
@@ -681,6 +717,37 @@ class AgentRunner:
             return "Credential request timed out. Use request_human_assistance as fallback."
         finally:
             hitl_events.pop(task_id, None)
+
+    async def _handle_cancellation(self) -> None:
+        """Generate partial summary and mark task as cancelled."""
+        await self._log("Task cancelled by user. Generating partial summary...")
+        summary = "Task cancelled by user."
+        try:
+            self._messages.append({
+                "role": "user",
+                "content": (
+                    "The user has cancelled this task. "
+                    "Summarize what you accomplished so far and what remains unfinished. "
+                    "Include any partial data you already collected. "
+                    "Respond with plain text only — no tool calls."
+                ),
+            })
+            partial = await asyncio.wait_for(
+                self._client.chat.completions.create(
+                    model=settings.openai_model,
+                    messages=self._messages,
+                ),
+                timeout=30,
+            )
+            summary = partial.choices[0].message.content or summary
+        except Exception:
+            pass
+
+        self.task.result_data = {"summary": summary, "complete": False, "cancelled": True}
+        if self._evidence:
+            self.task.result_data["screenshots"] = self._evidence
+        await self._log(f"Done (cancelled): {summary[:200]}")
+        await self._set_status("completed")
 
     # ------------------------------------------------------------------
     # Persistence helpers

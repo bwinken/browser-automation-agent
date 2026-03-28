@@ -116,10 +116,39 @@
 
 **Result: 3/5 passed**
 
-### Phase 3 Open Issues
+### Phase 3 Round 2
 
-- [ ] Cross-site comparison: agent must extract ALL requested fields from both sites
-- [ ] 104 detail page: agent must take evidence screenshot of the detail page
+| Test | Task ID | Score | Pass | Notes |
+|---|---|---|---|---|
+| THSR+TRA Comparison | 298009ec | 100 | PASS | Both THSR times/price + TRA fare extracted, 41 iterations |
+| 104 Job Detail | 4ed6c15b | 100 | PASS | All fields extracted + evidence screenshot, only 10 iterations |
+
+**Result: 2/2 re-tested passed**
+
+### Phase 3 Summary
+
+| Test | Round 1 | Round 2 | Status |
+|---|---|---|---|
+| TWSE CSV Download | 100 PASS | — | ✅ |
+| arXiv PDF Download | 100 PASS | — | ✅ |
+| THSR+TRA Comparison | 70 FAIL | **100 PASS** | ✅ |
+| 104 Job Detail | 40 FAIL | **100 PASS** | ✅ |
+| TWSE Investors + Download | 90 PASS | — | ✅ |
+| **Total** | **3/5** | **5/5** | |
+
+### Phase 3 Fixes Applied
+
+- [x] Evidence screenshot bug: `review_and_finalize` screenshot no longer cleared by `take_screenshot` deferred logic
+- [x] COMPLETENESS CHECK step added to system prompt — agent verifies ALL requested fields before summarizing
+- [x] Task timeout (300s) prevents infinite execution
+- [x] Per-tool timeout (60s) prevents individual tool hangs
+- [x] Enhanced loop detection: same-tool-name counter (10x in window → force break)
+- [x] Cancel button: frontend can terminate running tasks
+
+### Phase 3 Open Issues (resolved)
+
+- [x] Cross-site comparison: agent must extract ALL requested fields from both sites — FIXED, 100/100
+- [x] 104 detail page: agent must take evidence screenshot of the detail page — FIXED, 100/100
 
 ---
 

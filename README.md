@@ -111,12 +111,13 @@ sequenceDiagram
 ### Intelligence
 - **ReAct loop** — Reason → Act → Observe on every step
 - **Self-healing** — auto-retry with selector fallbacks (CSS → text → role), error classification
-- **Loop detection** — detects repeated failing actions and forces strategy change
+- **Loop detection** — detects repeated failing actions and forces strategy change; same-tool-name tracking (10x in 20-action window) triggers force break
 - **Auto-dismiss overlays** — cookie banners, popups, login promos dismissed automatically (multilingual)
 - **Evidence verification** — `review_and_finalize` tool cross-checks summary against actual page before delivering results
 
 ### Interaction
 - **Chat interface** — conversational UI with tool execution panel
+- **Task cancel** — Stop button cancels running tasks; agent returns partial summary
 - **Task continuation** — follow-up messages resume with full conversation history
 - **ask_user** — agent asks clarifying questions inline (single-select, multi-select, free-text)
 - **request_credentials** — structured credential forms for login flows
@@ -126,7 +127,8 @@ sequenceDiagram
 - **CAPTCHA handling** — multi-strategy: checkbox click → 2Captcha API → image vision → HITL fallback
 - **Stealth mode** — `playwright-stealth` + randomized UA/viewport/timezone/delays
 - **Human-like interactions** — press-and-hold with mouse curve simulation, random delays between actions
-- **Smart timeouts** — page stabilization, network idle detection, LLM API timeout protection
+- **Task cancel** — Stop button / REST API / WebSocket signal to cancel running tasks; agent generates partial summary before stopping
+- **Smart timeouts** — per-tool timeout (60s), overall task timeout (300s) with partial summary, page stabilization, network idle detection, LLM API timeout protection
 - **WebSocket auto-reconnect** — frontend recovers from connection drops
 
 ---
@@ -220,6 +222,7 @@ GET  /api/users/admin/invites     — (Admin) List all invite codes
 
 POST /api/task                    — Submit task (202 + task_id)
 POST /api/task/{task_id}/continue — Continue task with follow-up message
+POST /api/task/{task_id}/cancel   — Cancel a running task (partial summary returned)
 GET  /api/task/{task_id}          — Poll task status + logs + result
 GET  /api/task                    — List tasks (paginated, newest first)
 
@@ -232,6 +235,7 @@ WS   /ws/task/{task_id}           — Live log stream + HITL + ask_user channel
 pending → running → completed
                  → paused (HITL/ask_user) → running → completed
                  → failed
+                 → cancelled (via /cancel, partial summary returned)
 completed → running (via /continue) → completed
 ```
 
@@ -250,7 +254,7 @@ completed → running (via /continue) → completed
 | `scroll(direction, amount?)` | Scroll page up/down |
 | `wait_for_element(selector, timeout?)` | Wait for dynamic element to appear |
 | `get_page_content()` | LLM-friendly DOM snapshot (80 elements) |
-| `take_screenshot()` | Screenshot visible to LLM via vision |
+| `take_screenshot(evidence?)` | Screenshot visible to LLM via vision; `evidence=true` saves as verifiable evidence for the final report |
 | `evaluate_javascript(script)` | Execute JS in browser (advanced fallback) |
 | `download_file(url?, selector?)` | Download file by URL or click trigger |
 | `load_skill(name)` | Load a skill playbook on demand |
@@ -318,15 +322,35 @@ Score: 0-100, with pass/fail. Results saved in `test_results.md`.
 
 ### Field-tested scenarios
 
-| Scenario | Source | Status |
+**Phase 1 — Core data tasks (5/5 passed)**
+
+| Scenario | Source | Score |
 |---|---|---|
-| Weather forecast | CWA (中央氣象署) | Working |
-| Job search | 104.com.tw | Verified 100/100 |
-| Price comparison | PCHome + Momo | Working |
-| Stock market data | TWSE (台灣證券交易所) | Working |
-| Academic papers | Google Scholar | Verified 100/100 |
-| Exchange rates | 台灣銀行 | Working |
-| Train timetable | THSR (台灣高鐵) | Working |
+| Weather forecast | CWA (中央氣象署) | 100/100 |
+| Job search | 104.com.tw | 95/100 |
+| Price comparison | PCHome + Momo | 100/100 |
+| Stock market data | TWSE (台灣證券交易所) | 100/100 |
+| Academic papers | Google Scholar | 90/100 |
+
+**Phase 2 — Complex operations (4/5 passed)**
+
+| Scenario | Source | Score |
+|---|---|---|
+| TRA train timetable | 台鐵 e 訂通 | 95/100 |
+| Hotel search | Booking.com | 100/100 |
+| Company lookup | findbiz.nat.gov.tw | 100/100 |
+| Exchange rates | 台灣銀行 | 100/100 |
+| PTT hot topics | PTT Gossiping | 80 (timing issue) |
+
+**Phase 3 — Downloads & multi-step operations (5/5 passed)**
+
+| Scenario | Source | Score |
+|---|---|---|
+| TWSE CSV download | TWSE | 100/100 |
+| arXiv PDF download | arXiv | 100/100 |
+| THSR + TRA comparison | THSR + TRA | 100/100 |
+| 104 job detail extraction | 104.com.tw | 100/100 |
+| TWSE investors + download | TWSE | 90/100 |
 
 ---
 
@@ -359,7 +383,7 @@ Score: 0-100, with pass/fail. Results saved in `test_results.md`.
 ### Model & Cost
 - **Token usage scales with iterations** — complex tasks (20+ iterations) can consume significant tokens, especially with vision (screenshots)
 - **Vision detail level** — screenshots sent to LLM use `detail: auto`; high-resolution pages increase token cost
-- **No streaming** — agent runs to completion; no partial results during execution
+- **No streaming** — agent runs to completion; partial summaries are only generated on cancel or timeout
 
 ---
 

@@ -26,7 +26,7 @@ import logging
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.models import Task
-from app.shared import hitl_events, hitl_responses, ws_queues
+from app.shared import cancel_events, hitl_events, hitl_responses, ws_queues
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +66,12 @@ async def _receive_loop(websocket: WebSocket, task_id: str) -> None:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
                 continue
+
+            if msg.get("type") == "cancel":
+                evt = cancel_events.get(task_id)
+                if evt:
+                    evt.set()
+                    log.info("Cancel signal received for task %s", task_id)
 
             if msg.get("type") == "hitl_response":
                 response_text = msg.get("response", "")
