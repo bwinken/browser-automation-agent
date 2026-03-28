@@ -106,7 +106,7 @@ sequenceDiagram
 - **Pure OpenAI SDK** tool-calling loop (Chat Completions API)
 - **Vision** — agent can see screenshots (GPT-4o vision) for CAPTCHA reading, coordinate clicking, and result verification
 - **17 browser tools** — navigate, click, fill, scroll, press_key, screenshot, download, and more
-- **Progressive skill loading** — 27 skill playbooks loaded on-demand (not all in system prompt)
+- **Progressive skill loading** — 35 skill playbooks loaded on-demand (not all in system prompt)
 
 ### Intelligence
 - **ReAct loop** — Reason → Act → Observe on every step
@@ -255,7 +255,7 @@ completed → running (via /continue) → completed
 
 ---
 
-## Skills (27)
+## Skills (35)
 
 Skills are loaded on-demand via `load_skill()` — only the catalogue (names + triggers) is in the system prompt.
 
@@ -265,8 +265,8 @@ Skills are loaded on-demand via `load_skill()` — only the catalogue (names + t
 | **Authentication** | Identify Login Type, Standard Form, Multi-Step, OAuth, SSO, Magic Link, Phone OTP, Two-Factor/MFA |
 | **CAPTCHA** | CAPTCHA Handling, Image CAPTCHA / Verification Code |
 | **Navigation** | Search Pattern, Infinite Scroll, Navigation Error Recovery, Multi-Page Navigation, Avoid Blocked Services |
-| **Data** | Date Picker Handling, Data Extraction, Evidence Collection |
-| **Domain** | Travel / Hotel Booking, Transportation / Ticket Booking, Complex Web App, Form Filling, File Download |
+| **Data** | Date Picker Handling, Data Extraction, Evidence Collection, Financial Market Data |
+| **Domain** | Travel / Hotel Booking, Transportation / Ticket Booking, E-commerce / Price Comparison, Job Search Sites, Real Estate / Rental, Academic Research, Weather Forecast, Government / Bank Data, Complex Web App, Form Filling, File Download |
 | **Recovery** | Self-Healing / Error Recovery |
 
 ---
@@ -289,6 +289,37 @@ Chat-based interface with three panels:
 │  [Type a task or reply...]                        [Send]    │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Testing & Verification
+
+### Automated QA
+
+```bash
+# Run a task, then verify the result against evidence screenshots
+python test_verify.py <task_id> [task_id2 ...]
+```
+
+The verification script uses GPT vision to cross-check:
+- **Data accuracy** — every number, name, date in summary matches screenshot
+- **Completeness** — task asked for N items, result has N items
+- **Screenshot relevance** — evidence shows actual results, not popups/errors
+- **Source credibility** — data comes from legitimate sources
+
+Score: 0-100, with pass/fail. Results saved in `test_results.md`.
+
+### Field-tested scenarios
+
+| Scenario | Source | Status |
+|---|---|---|
+| Weather forecast | CWA (中央氣象署) | Working |
+| Job search | 104.com.tw | Verified 100/100 |
+| Price comparison | PCHome + Momo | Working |
+| Stock market data | TWSE (台灣證券交易所) | Working |
+| Academic papers | Google Scholar | Verified 100/100 |
+| Exchange rates | 台灣銀行 | Working |
+| Train timetable | THSR (台灣高鐵) | Working |
 
 ---
 
@@ -324,5 +355,7 @@ app/
 static/
 └── index.html        Chat interface + tool panel
 run.py                Entry point (Windows event loop policy)
+test_verify.py        Automated QA — GPT vision cross-check
+test_results.md       Test results log
 Dockerfile
 ```

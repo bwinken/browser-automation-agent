@@ -2,6 +2,53 @@
 
 ---
 
+## [0.3.0] — 2026-03-28
+
+### Field-tested skills, strict verification, and stability fixes
+
+**New Skills (27 → 35)**
+- E-commerce / Price Comparison — PCHome JSON API, Momo URL search patterns
+- Government / Bank Public Data — 台銀匯率 direct URL, CSV download, table extraction
+- Financial Market Data — TWSE JSON API endpoints, Big5 encoding warning
+- Job Search Sites — 104 URL patterns, area codes, virtual DOM extraction
+- Real Estate / Rental — 591 URL patterns, Vue SPA hashed class workaround
+- Academic Research — Google Scholar (no login!), arXiv PDF download
+- Weather Forecast — CWA direct county URLs (CID codes), table extraction
+
+**Strict Verification System**
+- `review_and_finalize` now requires item-by-item cross-check: every number,
+  name, date, count must exactly match the evidence screenshot
+- `test_verify.py` — automated post-task QA using GPT vision to compare
+  summary against screenshots (score 0-100, pass/fail)
+- Test results: Google Scholar improved 60→100 after strict review
+
+**Stability Fixes**
+- Upgraded openai SDK 1.35→2.x (fixed httpx proxies incompatibility)
+- LLM API timeout: 120s SDK + 150s asyncio safety net
+- Reduced tool timeouts: `_wait_for_stable` 2s+0.8s, `_find_element` 5s+1.5s+1s
+- Loop detection: window 20, threshold 4, hard limit 6
+- `fill()` auto-clicks first autocomplete suggestion
+- CAPTCHA: checkbox before API for Turnstile/hCaptcha (faster + free)
+- Click intercept: Escape → dismiss overlay → scroll (footer) → force click
+- Press-and-hold: human-like mouse curve + jitter simulation
+- Every tool_call guaranteed a response (try/finally)
+- Deferred screenshot injection (after all tool results)
+- WebSocket auto-reconnect (5 attempts, linear backoff)
+
+**Infrastructure**
+- `/downloads/` endpoint with auth protection + path traversal prevention
+- `download_file` returns download URL for frontend access
+- Viewport fixed at 1440x1200 for better result visibility
+- Removed BrowserState, CDP, persistent profile (simplified)
+- Task continuation: conversation history always saved (fallback to prompt)
+
+**Frontend**
+- Evidence screenshots in chat (click to enlarge, numbered)
+- Result poll fallback for task continuation
+- Mandatory screenshots at key decision points
+
+---
+
 ## [0.2.0] — 2026-03-28
 
 ### Major upgrade — intelligent agent with vision, skills, and self-healing
