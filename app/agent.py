@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import random
+import re
 from typing import Any, Dict, List
 
 from playwright_stealth import Stealth
@@ -119,6 +120,11 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
      numbers you extracted in step 1, not approximations from the screenshot.
   6. Only write your final summary AFTER the review confirms "All verified".
 """
+
+_QUOTA_EXHAUSTED_MSG = (
+    "Your free quota has been used up. "
+    "Go to Settings and add your own OpenAI API key to continue."
+)
 
 _skill_catalogue = build_skill_catalogue()
 
@@ -220,11 +226,8 @@ class AgentRunner:
     async def _run_with_playwright(self, pw) -> None:
         # Check quota before starting
         if self._using_system_key and not self.user.has_budget:
-            await self._log("Quota exhausted. Add your own OpenAI API key to continue.")
-            self._set_result(
-                "Your free quota ($10.00) has been used up. Go to Settings and add your own OpenAI API key.",
-                complete=False, quota_exhausted=True,
-            )
+            await self._log("Quota exhausted.")
+            self._set_result(_QUOTA_EXHAUSTED_MSG, complete=False, quota_exhausted=True)
             await self._set_status("completed")
             return
 
@@ -316,12 +319,8 @@ class AgentRunner:
 
                     # Check quota (system key only)
                     if self._using_system_key and not self.user.has_budget:
-                        await self._log("Quota exhausted. Please add your own OpenAI API key to continue.")
-                        self._set_result(
-                            "Your free quota ($10.00) has been used up. "
-                            "To continue using the service, go to Settings and add your own OpenAI API key.",
-                            complete=False, quota_exhausted=True,
-                        )
+                        await self._log("Quota exhausted.")
+                        self._set_result(_QUOTA_EXHAUSTED_MSG, complete=False, quota_exhausted=True)
                         await self._set_status("completed")
                         return
 
@@ -454,17 +453,12 @@ class AgentRunner:
                                         executor._is_evidence_screenshot = False
                                     executor._last_screenshot_b64 = None
 
-                            # Track download URLs
-                            if name == "download_file" and tool_result and "Download URL:" in tool_result:
-                                import re
-                                dm = re.search(r"Downloaded: (.+?) \((.+?)\)", tool_result)
-                                um = re.search(r"Download URL: (.+)", tool_result)
-                                if dm and um:
-                                    self._downloads.append({
-                                        "filename": dm.group(1),
-                                        "size": dm.group(2),
-                                        "url": um.group(1).strip(),
-                                    })
+                            # Track download URLs via executor attribute
+                            if name == "download_file":
+                                dl_meta = getattr(executor, "_last_download", None)
+                                if dl_meta:
+                                    self._downloads.append(dl_meta)
+                                    executor._last_download = None
 
                             # review_and_finalize stores its screenshot directly
                             if name == "review_and_finalize":
@@ -795,6 +789,10 @@ class AgentRunner:
         if prev.get("summary") and prev["summary"] != summary:
             archived = {k: v for k, v in prev.items() if k != "history"}
             history.append(archived)
+            # Clear per-round state so next round starts fresh
+            self._evidence.clear()
+            self._evidence_hashes.clear()
+            self._downloads.clear()
 
         # Set current result as top-level + keep history
         entry["history"] = history

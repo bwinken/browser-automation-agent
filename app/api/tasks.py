@@ -120,7 +120,7 @@ async def get_task(
         if role != "user" or not isinstance(content, str) or not content.strip():
             continue
         # Skip system-injected / internal messages
-        if content.startswith(("The task has timed out", "The user has cancelled", "You have reached the maximum", "(previous screenshot", "[screenshot pruned", "Here is the current browser")):
+        if content.startswith(("The task has timed out", "The user has cancelled", "You have reached the maximum", "[screenshot pruned", "Here is the current browser")):
             continue
         # Skip the original prompt (already in task.prompt) — only include follow-ups
         if not seen_prompt:
@@ -178,13 +178,19 @@ async def list_tasks(
         .limit(limit)
         .to_list()
     )
+    def _slim_result(rd):
+        """Strip heavy fields (screenshots, history) from result_data for list view."""
+        if not rd:
+            return rd
+        return {k: v for k, v in rd.items() if k not in ("screenshots", "history")}
+
     return {
         "tasks": [
             {
                 "task_id": t.task_id,
                 "status": t.status,
                 "prompt": t.prompt[:80],
-                "result_data": t.result_data,
+                "result_data": _slim_result(t.result_data),
                 "created_at": t.created_at.isoformat(),
             }
             for t in tasks

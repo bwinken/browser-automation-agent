@@ -948,6 +948,8 @@ class PlaywrightToolExecutor:
         size = os.path.getsize(save_path)
         size_str = f"{size / 1024:.1f} KB" if size < 1_048_576 else f"{size / 1_048_576:.1f} MB"
         download_url = f"/downloads/{filename}"
+        # Store structured metadata for agent loop to collect
+        self._last_download = {"filename": filename, "size": size_str, "url": download_url}
         return (
             f"Downloaded: {filename} ({size_str})\n"
             f"Download URL: {download_url}\n"

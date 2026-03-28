@@ -222,6 +222,11 @@
     .guide-ex { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: .8rem; color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s; }
     .guide-ex:hover { border-color: var(--accent); color: var(--text); }
     .guide-code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: .78rem; line-height: 1.6; overflow-x: auto; white-space: pre; color: var(--text); }
+    /* Download link */
+    .dl-link { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg,#1a3a25,#0d2818); border: 1px solid var(--accent2); border-radius: 8px; padding: 10px 14px; color: var(--accent2); text-decoration: none; font-size: .88rem; margin-bottom: 10px; transition: opacity .15s; }
+    .dl-link:hover { opacity: .85; }
+    .dl-link .dl-icon { font-size: 1.4rem; }
+    .dl-link .dl-size { color: var(--muted); font-size: .75rem; }
     /* Admin */
     .admin-table { width: 100%; border-collapse: collapse; font-size: .8rem; margin: 8px 0; }
     .admin-table th, .admin-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
@@ -828,9 +833,9 @@ function showStructuredResult(r) {
   if (r.downloads && r.downloads.length) {
     r.downloads.forEach(d => {
       const dlHref = d.url + (apiKey ? '?token=' + encodeURIComponent(apiKey) : '');
-      html += `<a href="${esc(dlHref)}" target="_blank" download style="display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#1a3a25,#0d2818);border:1px solid var(--accent2);border-radius:8px;padding:10px 14px;color:var(--accent2);text-decoration:none;font-size:.88rem;margin-bottom:10px;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">`
-        + `<span style="font-size:1.4rem">&#11015;</span>`
-        + `<span><strong>${esc(d.filename)}</strong><br><span style="color:var(--muted);font-size:.75rem">${esc(d.size)} — Click to download</span></span></a>`;
+      html += `<a href="${esc(dlHref)}" target="_blank" download class="dl-link">`
+        + `<span class="dl-icon">&#11015;</span>`
+        + `<span><strong>${esc(d.filename)}</strong><br><span class="dl-size">${esc(d.size)} — Click to download</span></span></a>`;
     });
   }
 
