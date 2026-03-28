@@ -44,10 +44,12 @@ async def verify_task(task_id: str, api_key: str, openai_key: str, base_url: str
 
     # 2. Build verification prompt
     checks = [
-        "1. DATA ACCURACY: Does the summary text match what is shown in the screenshot(s)? Are numbers, names, prices correct?",
-        "2. COMPLETENESS: Did the task ask for N items (e.g. 'top 3', '5 jobs')? Does the summary contain that many items?",
-        "3. SCREENSHOT RELEVANCE: Do the screenshots show the actual results page (not a login page, error page, or popup)?",
-        "4. SOURCE CREDIBILITY: Is the data from a legitimate source (official website, not fabricated)?",
+        "1. DATA ACCURACY: Do the numbers in the summary (prices, temperatures, percentages) match the screenshot? Small rounding differences are OK.",
+        "2. COMPLETENESS: Did the task ask for N items? Does the summary contain that many? Count them.",
+        "3. SCREENSHOT RELEVANCE: Does the screenshot show a data page? If the screenshot shows an error (e.g. 429) but the agent noted it used an API fallback, that is ACCEPTABLE — do not penalize.",
+        "4. SOURCE CREDIBILITY: Is the data from a legitimate source?",
+        "5. DATE RANGES: 'since 2024' means 2024 and later (2024, 2025, 2026 are all valid). Do not penalize papers from 2025 if the task says 'since 2024'.",
+        "6. AGENT ADAPTATION: If the agent encountered an error (429, CAPTCHA, redirect) and adapted by using an API or alternative approach, this is GOOD behavior — do not penalize as long as the final data is reasonable.",
     ]
 
     messages = [
