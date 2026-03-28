@@ -158,12 +158,36 @@ class AgentRunner:
                     )
             except asyncio.TimeoutError:
                 log.warning("Task %s timed out after %ds", self.task.task_id, settings.task_timeout)
-                await self._log(f"Task timed out after {settings.task_timeout}s.")
-                self.task.result_data = {
-                    "summary": f"Task timed out after {settings.task_timeout} seconds. Partial progress may be in the logs.",
-                    "complete": False,
-                }
-                await self._set_status("failed")
+                await self._log(f"Task timed out after {settings.task_timeout}s. Generating partial summary...")
+
+                # Ask LLM to summarize what was accomplished so far
+                summary = f"Task timed out after {settings.task_timeout} seconds."
+                try:
+                    self._messages.append({
+                        "role": "user",
+                        "content": (
+                            f"The task has timed out after {settings.task_timeout} seconds. "
+                            "Summarize what you accomplished so far and what remains unfinished. "
+                            "Include any partial data you already collected. "
+                            "Respond with plain text only — no tool calls."
+                        ),
+                    })
+                    partial = await asyncio.wait_for(
+                        self._client.chat.completions.create(
+                            model=settings.openai_model,
+                            messages=self._messages,
+                        ),
+                        timeout=30,
+                    )
+                    summary = partial.choices[0].message.content or summary
+                except Exception:
+                    pass
+
+                self.task.result_data = {"summary": summary, "complete": False}
+                if self._evidence:
+                    self.task.result_data["screenshots"] = self._evidence
+                await self._log(f"Done (timed out): {summary[:200]}")
+                await self._set_status("completed")
 
     # ------------------------------------------------------------------
     # Internal helpers
