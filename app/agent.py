@@ -107,12 +107,12 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
 - EVIDENCE FLOW (follow this order):
   1. CONFIRM data first: use get_page_content or evaluate_javascript to extract the key results \
      (names, prices, times, etc). Write them down in your reasoning.
-  2. THEN screenshot: scroll to show each result → take_screenshot → scroll → take_screenshot.
-  3. VERIFY: check your extracted data matches what the screenshots show. \
-     If a popup is blocking, press_key('Escape') first.
-  4. REVIEW: call review_and_finalize(planned_summary="your draft summary based on extracted data"). \
-     This takes a final screenshot for cross-checking. Fix any mismatches before concluding.
-  5. Only write your final summary (no tool call) AFTER the review passes.
+  2. THEN screenshot: take_screenshot of the results page showing the data you extracted.
+  3. REVIEW: call review_and_finalize with your draft summary. The review will compare \
+     your summary against the screenshot pixel-by-pixel. Every number, name, date, and \
+     count in your summary MUST exactly match the screenshot. If the review finds errors, \
+     fix them and call review_and_finalize again with the corrected summary.
+  4. Only write your final summary (no tool call) AFTER the review confirms "All verified".
 """
 
 _skill_catalogue = build_skill_catalogue()

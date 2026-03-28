@@ -953,9 +953,15 @@ class PlaywrightToolExecutor:
             f"REVIEW: Screenshot captured. The image is now visible to you.\n"
             f"Your planned summary:\n---\n{planned_summary}\n---\n"
             f"Page content snapshot:\n{page_data[:1500]}\n\n"
-            f"CHECK: Does your planned summary accurately match what the screenshot "
-            f"and page content show? If NOT, revise your summary before finishing. "
-            f"If the screenshot shows a popup or wrong page, press Escape and retry."
+            f"STRICT VERIFICATION — check EACH item:\n"
+            f"1. For every number in your summary (prices, temperatures, percentages, counts), "
+            f"verify it EXACTLY matches what the screenshot or page content shows. If ANY number is wrong, fix it.\n"
+            f"2. For every name (hotel, company, paper title, stock), verify spelling matches the source.\n"
+            f"3. Count the items: if the task asked for N results, confirm you have exactly N.\n"
+            f"4. Verify the screenshot shows the ACTUAL results, not a popup, login, or error page.\n"
+            f"5. If you cited a year, citation count, or date, verify it matches the screenshot exactly.\n\n"
+            f"If ANY mismatch is found: state what's wrong, correct it, then output the REVISED summary.\n"
+            f"If everything matches: confirm 'All verified' and output the final summary."
         )
 
     async def load_skill(self, name: str) -> str:
