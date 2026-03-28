@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o"
     max_concurrent_browsers: int = 2
     max_agent_iterations: int = 20
+    task_timeout: int = 300  # max seconds per task (default 5 min)
     demo_api_key: str = ""
     twocaptcha_api_key: str = ""
     admin_username: str = ""

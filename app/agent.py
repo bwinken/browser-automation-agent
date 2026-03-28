@@ -107,10 +107,13 @@ Only call ask_user when you truly cannot decide (e.g. "which of these 3 to book?
 - EVIDENCE FLOW (follow this order strictly):
   1. EXTRACT data via code: use evaluate_javascript to pull exact numbers, names, dates from the DOM. \
      Write them in your reasoning. NEVER guess numbers from screenshots — always extract from DOM first.
-  2. RELEVANCE CHECK: verify each result matches the search query. Skip irrelevant items.
+  2. COMPLETENESS CHECK: re-read the original task. For EVERY field the user asked for, confirm you \
+     have extracted it. If a field is missing (e.g. price, date, duration), go back and extract it \
+     BEFORE proceeding. Do NOT skip fields or write "not shown".
   3. DATE CHECK: if the page shows a date, note it exactly. If the data is from a previous day \
      (e.g. non-business hours), explicitly state this in your summary.
-  4. SCREENSHOT: take_screenshot AFTER confirming data. The screenshot is evidence, not a data source.
+  4. SCREENSHOT: take_screenshot of EVERY page you extracted data from. Each source page needs \
+     its own evidence screenshot. If you visited 2 sites, take 2 screenshots.
   5. REVIEW: call review_and_finalize with your draft summary. The summary must use the EXACT \
      numbers you extracted in step 1, not approximations from the screenshot.
   6. Only write your final summary AFTER the review confirms "All verified".
@@ -147,8 +150,20 @@ class AgentRunner:
 
     async def run(self) -> None:
         async with _browser_semaphore:
-            async with async_playwright() as pw:
-                await self._run_with_playwright(pw)
+            try:
+                async with async_playwright() as pw:
+                    await asyncio.wait_for(
+                        self._run_with_playwright(pw),
+                        timeout=settings.task_timeout,
+                    )
+            except asyncio.TimeoutError:
+                log.warning("Task %s timed out after %ds", self.task.task_id, settings.task_timeout)
+                await self._log(f"Task timed out after {settings.task_timeout}s.")
+                self.task.result_data = {
+                    "summary": f"Task timed out after {settings.task_timeout} seconds. Partial progress may be in the logs.",
+                    "complete": False,
+                }
+                await self._set_status("failed")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -332,12 +347,12 @@ class AgentRunner:
                                     })
                                     executor._last_screenshot_b64 = None
 
-                            # Only review_and_finalize screenshots go to evidence
+                            # review_and_finalize stores its screenshot directly
                             if name == "review_and_finalize":
-                                rb64 = getattr(executor, "_last_screenshot_b64", None)
+                                rb64 = getattr(executor, "_review_screenshot_b64", None)
                                 if rb64:
                                     self._add_evidence(rb64)
-                                    executor._last_screenshot_b64 = None
+                                    executor._review_screenshot_b64 = None
 
                     except Exception as exc:
                         log.warning("Tool dispatch error for %s: %s", tc.id, exc)

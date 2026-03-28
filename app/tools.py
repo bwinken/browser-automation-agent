@@ -944,6 +944,8 @@ class PlaywrightToolExecutor:
         raw = await self._page.screenshot(type="png")
         b64 = base64.b64encode(raw).decode()
         self._last_screenshot_b64 = b64
+        # Store separately for evidence collection (not cleared by take_screenshot deferred logic)
+        self._review_screenshot_b64 = b64
         # Also get page text for cross-check
         try:
             page_data = await self._page.evaluate(_GET_PAGE_CONTENT_JS)
