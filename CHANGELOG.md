@@ -2,6 +2,33 @@
 
 ---
 
+## [0.4.0] — 2026-03-28
+
+### Invite code auth system + login page
+
+**Authentication**
+- Invite code system: only users with valid invite codes can register
+- `InviteCode` model: code, used status, used_by, timestamps
+- `User.is_admin` field for admin-only operations
+- Register endpoint requires `invite_code` parameter
+- Password minimum 6 characters enforced
+- Admin endpoints: `POST /api/users/admin/invite`, `GET /api/users/admin/invites`
+
+**Startup Seeding**
+- `ADMIN_USERNAME` + `ADMIN_PASSWORD` in `.env` auto-creates admin user on first run
+- `INITIAL_INVITE_CODES` (default 3) auto-generates invite codes if none exist
+- Invite codes logged to console for distribution
+
+**Frontend**
+- Full login/register page (dark theme, centered card)
+- Register form: invite code + username + password
+- Login form: username + password
+- API key persisted in `localStorage` (survives page refresh)
+- Logout button in header clears session
+- Auth page blocks all access until authenticated
+
+---
+
 ## [0.3.0] — 2026-03-28
 
 ### Field-tested skills, strict verification, and stability fixes
