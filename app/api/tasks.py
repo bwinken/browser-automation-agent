@@ -86,6 +86,7 @@ async def get_task(
         raise HTTPException(status_code=404, detail="Task not found")
     return {
         "task_id": task.task_id,
+        "prompt": task.prompt,
         "status": task.status,
         "logs": task.logs,
         "result_data": task.result_data,

@@ -329,12 +329,19 @@ function doLogout() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────
-function init() {
+async function init() {
   // Check localStorage for saved session
   const savedKey = localStorage.getItem('baas_api_key');
   const savedUser = localStorage.getItem('baas_username');
   if (savedKey) {
     onAuthSuccess(savedKey, savedUser || 'user');
+  } else {
+    // Try demo-key for DEV_MODE
+    try {
+      const r = await fetch('/api/task/demo-key');
+      const d = await r.json();
+      if (d.api_key) onAuthSuccess(d.api_key, 'dev');
+    } catch {}
   }
   // Allow Enter to submit auth forms
   document.getElementById('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
