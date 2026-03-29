@@ -715,11 +715,10 @@ async function handleSend() {
         const pr = await fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
         if (pr.ok) {
           const pt = await pr.json();
-          if ((pt.status === 'completed' || pt.status === 'failed') && pt.result_data && pt.result_data.summary !== _lastShownSummary) {
+          if ((pt.status === 'completed' || pt.status === 'failed')) {
             setBadge(pt.status);
             enableSend();
-            _lastShownSummary = pt.result_data.summary;
-            showStructuredResult(pt.result_data);
+            if (pt.result_data) fetchResultWithRetry(currentTaskId);
             loadHistory();
             loadQuota();
           }
@@ -732,6 +731,21 @@ async function handleSend() {
 function enableSend() {
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('stopBtn').style.display = 'none';
+}
+async function fetchResultWithRetry(taskId, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const r = await fetch('/api/task/' + taskId, { headers: { 'Authorization': 'Bearer ' + apiKey } });
+      if (!r.ok) continue;
+      const t = await r.json();
+      if (t.result_data && t.result_data.summary !== _lastShownSummary) {
+        _lastShownSummary = t.result_data.summary;
+        showStructuredResult(t.result_data);
+      }
+      return;
+    } catch {}
+    await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+  }
 }
 function showStopBtn() {
   document.getElementById('stopBtn').style.display = '';
@@ -783,16 +797,8 @@ function _connectWsInner(taskId) {
       enableSend();
       loadHistory();
       loadQuota();
-      // Append result (dedup: skip if same summary already shown)
-      if (currentTaskId) {
-        fetch('/api/task/' + currentTaskId, { headers: { 'Authorization': 'Bearer ' + apiKey } })
-          .then(r => r.json()).then(t => {
-            if (t.result_data && t.result_data.summary !== _lastShownSummary) {
-              _lastShownSummary = t.result_data.summary;
-              showStructuredResult(t.result_data);
-            }
-          }).catch(() => {});
-      }
+      // Append result with retry on network failure
+      if (currentTaskId) fetchResultWithRetry(currentTaskId);
     }
   };
   ws.onerror = () => addToolLine('WebSocket error.', 'err');
