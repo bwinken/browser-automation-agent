@@ -11,6 +11,7 @@ if sys.platform == "win32":
 
 from beanie import init_beanie
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -31,6 +32,10 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Safety check: warn if DEV_MODE is on with a remote database
+    if settings.dev_mode and "mongodb+srv" in settings.mongodb_url:
+        log.warning("DEV_MODE=true with a remote MongoDB — authentication is BYPASSED! Set DEV_MODE=false for production.")
+
     client = AsyncIOMotorClient(settings.mongodb_url)
     await init_beanie(
         database=client[settings.db_name],
@@ -48,15 +53,18 @@ async def lifespan(app: FastAPI):
 
     # Auto-create admin user
     if settings.admin_username:
+        admin_pw = settings.admin_password or ""
+        if admin_pw in ("", "admin", "change-me", "password", "123456"):
+            log.warning("ADMIN_PASSWORD is weak or default — set a strong password in production!")
         admin = await User.find_one(User.username == settings.admin_username)
         if not admin:
             admin = User(
                 username=settings.admin_username,
-                hashed_password=hash_password(settings.admin_password or "admin"),
+                hashed_password=hash_password(admin_pw or _secrets.token_hex(16)),
                 is_admin=True,
             )
             await admin.insert()
-            log.info("Admin user created: %s (API key: %s)", admin.username, admin.api_key)
+            log.info("Admin user created: %s (key: %s...)", admin.username, admin.api_key[:8])
 
     # Auto-generate initial invite codes
     code_count = await InviteCode.find(InviteCode.used == False).count()
@@ -66,9 +74,7 @@ async def lifespan(app: FastAPI):
             code = f"BAAS-{_secrets.token_hex(4).upper()}-{_secrets.token_hex(4).upper()}"
             await InviteCode(code=code).insert()
             codes.append(code)
-        log.info("Generated %d invite codes:", len(codes))
-        for c in codes:
-            log.info("  %s", c)
+        log.info("Generated %d invite codes (view via admin dashboard)", len(codes))
 
     yield
     client.close()
@@ -85,7 +91,26 @@ app = FastAPI(
 @app.exception_handler(Exception)
 async def unhandled_exception(request: Request, exc: Exception):
     log.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+# CORS — restrict in production, allow all in dev
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if settings.dev_mode else [os.environ.get("ALLOWED_ORIGIN", "")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Security headers
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 # REST routes

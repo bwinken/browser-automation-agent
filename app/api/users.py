@@ -10,11 +10,17 @@ from app.models import InviteCode, User
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+import re as _re
+
+def _validate_username(v: str) -> str:
+    if not _re.match(r'^[a-zA-Z0-9_-]{3,30}$', v):
+        raise ValueError('Username must be 3-30 characters, alphanumeric/underscore/hyphen only')
+    return v
+
 class RegisterRequest(BaseModel):
     username: str
     password: str
     invite_code: str
-
 
 class LoginRequest(BaseModel):
     username: str
@@ -23,6 +29,12 @@ class LoginRequest(BaseModel):
 
 @router.post("/register", status_code=201)
 async def register(body: RegisterRequest):
+    # Validate username format
+    try:
+        _validate_username(body.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Validate invite code
     invite = await InviteCode.find_one(
         InviteCode.code == body.invite_code,

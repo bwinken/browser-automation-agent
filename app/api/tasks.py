@@ -12,11 +12,24 @@ router = APIRouter(prefix="/task", tags=["tasks"])
 
 @router.get("/demo-key", include_in_schema=False)
 async def demo_key():
+    if not settings.dev_mode:
+        raise HTTPException(status_code=404, detail="Not available")
     return {"api_key": settings.demo_api_key}
 
 
+from pydantic import field_validator
+
 class TaskCreate(BaseModel):
     prompt: str
+
+    @field_validator("prompt")
+    @classmethod
+    def check_prompt_length(cls, v):
+        if len(v.strip()) < 3:
+            raise ValueError("Prompt too short")
+        if len(v) > 10000:
+            raise ValueError("Prompt too long (max 10000 chars)")
+        return v.strip()
 
 
 class TaskContinue(BaseModel):

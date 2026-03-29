@@ -25,7 +25,8 @@ import logging
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.models import Task
+from app.config import settings
+from app.models import Task, User
 from app.shared import cancel_events, hitl_events, hitl_responses, ws_queues
 
 log = logging.getLogger(__name__)
@@ -35,6 +36,22 @@ _STATUS_POLL_INTERVAL = 2  # seconds between DB polls when queue is empty
 
 
 async def hitl_websocket(websocket: WebSocket, task_id: str) -> None:
+    # Authenticate: require ?token= query param (skip in dev mode)
+    if not settings.dev_mode:
+        token = websocket.query_params.get("token", "")
+        if not token:
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        user = await User.find_one(User.api_key == token)
+        if not user:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        # Verify task belongs to this user
+        task = await Task.find_one(Task.task_id == task_id, Task.user_id == user.id)
+        if not task:
+            await websocket.close(code=4003, reason="Task not found")
+            return
+
     await websocket.accept()
 
     queue: asyncio.Queue = asyncio.Queue()
