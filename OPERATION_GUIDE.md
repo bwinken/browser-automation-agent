@@ -65,14 +65,28 @@ When complete, the result appears in the chat:
 ![Task Result](docs/06_arxiv_result.png)
 
 - **Download links** appear as green buttons at the top (click to download)
-- **Markdown-formatted summary** with structured data
+- **Markdown-formatted summary** with structured data (title, arXiv ID, date, etc.)
 - **Evidence screenshots** from the browser (click to enlarge)
+- Tool Execution panel shows the full iteration history (#1 → #17)
 
 ### 6. Follow-up Questions
 
-Type another message to continue in the same task:
+Type another message to continue in the same task. The agent picks up where it left off:
 
-![Follow-up Result](docs/11_followup_complete.png)
+![Follow-up Running](docs/07_followup_running.png)
+
+- The Tool Execution panel shows a `── Follow-up ──` separator between rounds
+- Round 2 iterations appear below the separator
+- Both rounds' results are visible in the Done log on the right
+
+When the follow-up completes, both rounds are shown in the chat:
+
+![Follow-up Complete](docs/11_followup_complete.png)
+
+- Round 1: browser automation paper with download button
+- Follow-up user message: "Now find a recent paper about RAG..."
+- Round 2: RAG paper with its own download button + evidence screenshot
+- All previous results and downloads are preserved
 
 - The agent resumes with full conversation context
 - Previous results and downloads are preserved
