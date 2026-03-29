@@ -382,7 +382,7 @@ Score: 0-100, with pass/fail. Results saved in `test_results.md`.
 
 ### Model & Cost
 - **Token usage scales with iterations** — complex tasks (20+ iterations) can consume significant tokens, especially with vision (screenshots)
-- **Vision detail level** — screenshots sent to LLM use `detail: auto`; high-resolution pages increase token cost
+- **Vision detail level** — screenshots sent to LLM use `detail: low` to minimize token cost (~85 tokens per image); only the most recent screenshot is kept in context
 - **No streaming** — agent runs to completion; partial summaries are only generated on cancel or timeout
 
 ---
