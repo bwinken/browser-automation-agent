@@ -9,4 +9,5 @@ downloads/
 test_logs/
 *.png
 !docs/*.png
+reply_draft.md
 .playwright-mcp/
